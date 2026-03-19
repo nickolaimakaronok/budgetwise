@@ -1,0 +1,9 @@
+customtkinter==5.2.2
+matplotlib==3.9.2
+mplcursors==0.5.3
+peewee==3.17.6
+plyer==2.1.0
+tkcalendar==1.6.1
+Pillow==10.4.0
+pytest==8.3.3
+pyinstaller==6.10.0

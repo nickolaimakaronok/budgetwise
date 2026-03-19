@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+.venv/
+venv/
+env/
+
+# База данных (не коммитить личные данные!)
+*.db
+*.db-shm
+*.db-wal
+backups/
+
+# PyInstaller
+dist/
+build/
+*.spec
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+
+# macOS
+.DS_Store
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
