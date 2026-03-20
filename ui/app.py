@@ -108,7 +108,6 @@ class App(ctk.CTk):
             self.current_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
 
     def _load_page(self, page_id: str) -> ctk.CTkFrame:
-        """Returns the correct page frame for a given page_id."""
 
         if page_id == "dashboard":
             from ui.pages.dashboard import DashboardPage
@@ -122,17 +121,16 @@ class App(ctk.CTk):
             from ui.pages.budget import BudgetPage
             return BudgetPage(self.main_area, self.user, self)
 
+        if page_id == "analytics":
+            from ui.pages.analytics import AnalyticsPage
+            return AnalyticsPage(self.main_area, self.user, self)
+
         if page_id == "goals":
             from ui.pages.goals import GoalsPage
             return GoalsPage(self.main_area, self.user, self)
 
-        if page_id == "analytics":
-            from ui.pages.placeholder import PlaceholderPage
-            return PlaceholderPage(self.main_area, "📈", "Analytics", "Coming in Stage 4")
-
-
         if page_id == "settings":
-            from ui.pages.placeholder import PlaceholderPage
-            return PlaceholderPage(self.main_area, "⚙️", "Settings", "Coming in Stage 5")
+            from ui.pages.settings import SettingsPage
+            return SettingsPage(self.main_area, self.user, self)
 
         return None

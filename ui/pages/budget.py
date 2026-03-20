@@ -11,7 +11,7 @@ from services.budget_service import (
     copy_budgets_from_previous_month
 )
 from models.models import Category
-from utils.formatters import format_money_short, set_currency, percent
+from utils.formatters import format_money_short, set_currency
 
 
 class BudgetPage(ctk.CTkFrame):
@@ -22,9 +22,9 @@ class BudgetPage(ctk.CTkFrame):
         self.app   = app
         set_currency(user.currency)
 
-        today        = date.today()
-        self.year    = today.year
-        self.month   = today.month
+        today      = date.today()
+        self.year  = today.year
+        self.month = today.month
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
@@ -35,6 +35,7 @@ class BudgetPage(ctk.CTkFrame):
     # ── Header ────────────────────────────────────────────────────────────────
 
     def _build_header(self):
+        # White top bar with page title and action buttons
         header = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=0, height=72)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_columnconfigure(1, weight=1)
@@ -46,18 +47,20 @@ class BudgetPage(ctk.CTkFrame):
             text_color="#1E293B",
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
 
+        # Group the two buttons together on the right
         btn_frame = ctk.CTkFrame(header, fg_color="transparent")
         btn_frame.grid(row=0, column=2, padx=32, pady=12, sticky="e")
 
+        # Copies all limits from the previous month into the current month
         ctk.CTkButton(
             btn_frame, text="Copy last month",
             width=140, height=36, corner_radius=8,
-            fg_color="#F1F5F9", hover_color="#E2E8F0",
-            text_color="#1E293B",
+            fg_color="#F1F5F9", hover_color="#E2E8F0", text_color="#1E293B",
             font=ctk.CTkFont(size=13),
             command=self._copy_last_month,
         ).grid(row=0, column=0, padx=(0, 8))
 
+        # Opens the SetLimitDialog to add a new budget limit
         ctk.CTkButton(
             btn_frame, text="+ Set Limit",
             width=120, height=36, corner_radius=8,
@@ -69,6 +72,7 @@ class BudgetPage(ctk.CTkFrame):
     # ── Body ──────────────────────────────────────────────────────────────────
 
     def _build_body(self):
+        # Scrollable area holds one card per budget category
         self.body = ctk.CTkScrollableFrame(
             self, fg_color="#F8FAFC", corner_radius=0
         )
@@ -77,18 +81,19 @@ class BudgetPage(ctk.CTkFrame):
         self._load_rows()
 
     def _load_rows(self):
+        # Clear and re-render all budget rows
+        # Called on first load and after every change
         for w in self.body.winfo_children():
             w.destroy()
 
         rows = get_budget_status(self.user, self.year, self.month)
 
         if not rows:
+            # Empty state — user hasn't set any limits yet
             ctk.CTkLabel(
                 self.body,
                 text="No budget limits set.\nClick '+ Set Limit' to add one.",
-                font=ctk.CTkFont(size=14),
-                text_color="#94A3B8",
-                justify="center",
+                font=ctk.CTkFont(size=14), text_color="#94A3B8", justify="center",
             ).grid(row=0, column=0, pady=60)
             return
 
@@ -96,10 +101,11 @@ class BudgetPage(ctk.CTkFrame):
             self._budget_row(i, row)
 
     def _budget_row(self, idx, row):
+        # Color depends on how much of the limit has been used
         status_colors = {
-            "ok":      "#16A34A",
-            "warning": "#D97706",
-            "danger":  "#DC2626",
+            "ok":      "#16A34A",  # green — under 80%
+            "warning": "#D97706",  # orange — 80–99%
+            "danger":  "#DC2626",  # red — over 100%
         }
         bar_colors = {
             "ok":      "#16A34A",
@@ -107,43 +113,41 @@ class BudgetPage(ctk.CTkFrame):
             "danger":  "#DC2626",
         }
 
+        # White card for this category
         card = ctk.CTkFrame(self.body, fg_color="#FFFFFF", corner_radius=12)
         card.grid(row=idx, column=0, sticky="ew", pady=(0, 12))
         card.grid_columnconfigure(0, weight=1)
 
+        # Top row: icon + name on left, spent/limit on right, delete button
         top = ctk.CTkFrame(card, fg_color="transparent")
         top.grid(row=0, column=0, padx=20, pady=(16, 8), sticky="ew")
         top.grid_columnconfigure(1, weight=1)
 
-        # Icon + name
         cat   = row["category"]
         color = status_colors[row["status"]]
 
         ctk.CTkLabel(
             top, text=f"{cat.icon}  {cat.name}",
-            font=ctk.CTkFont(size=15, weight="bold"),
-            text_color="#1E293B",
+            font=ctk.CTkFont(size=15, weight="bold"), text_color="#1E293B",
         ).grid(row=0, column=0, sticky="w")
 
-        # Spent / Limit
+        # Shows e.g. "320 $ / 500 $" in the status color
         ctk.CTkLabel(
             top,
             text=f"{format_money_short(row['spent_cents'])} / {format_money_short(row['limit_cents'])}",
-            font=ctk.CTkFont(size=13),
-            text_color=color,
+            font=ctk.CTkFont(size=13), text_color=color,
         ).grid(row=0, column=1, sticky="e")
 
-        # Delete button
+        # Small X button to remove this budget limit
         ctk.CTkButton(
-            top, text="✕", width=28, height=28,
-            corner_radius=6, fg_color="transparent",
-            hover_color="#FEE2E2", text_color="#94A3B8",
+            top, text="✕", width=28, height=28, corner_radius=6,
+            fg_color="transparent", hover_color="#FEE2E2", text_color="#94A3B8",
             command=lambda b=row["budget"]: self._delete_budget(b),
         ).grid(row=0, column=2, padx=(8, 0))
 
-        # Progress bar
-        pct        = min(row["percent"] / 100, 1.0)
-        bar_color  = bar_colors[row["status"]]
+        # Progress bar — width reflects percentage used, capped at 100%
+        pct       = min(row["percent"] / 100, 1.0)
+        bar_color = bar_colors[row["status"]]
 
         bar_bg = ctk.CTkFrame(card, fg_color="#F1F5F9", corner_radius=4, height=8)
         bar_bg.grid(row=1, column=0, padx=20, pady=(0, 8), sticky="ew")
@@ -151,23 +155,25 @@ class BudgetPage(ctk.CTkFrame):
         bar_bg.grid_columnconfigure(0, weight=1)
 
         if pct > 0:
+            # Colored fill placed with .place() so it can have a fractional width
             bar_fill = ctk.CTkFrame(bar_bg, fg_color=bar_color, corner_radius=4, height=8)
             bar_fill.place(relx=0, rely=0, relwidth=pct, relheight=1)
 
-        # Bottom: left + percent
+        # Bottom row: amount remaining + percentage
         ctk.CTkLabel(
             card,
             text=f"Left: {format_money_short(row['left_cents'])}  ·  {row['percent']}%",
-            font=ctk.CTkFont(size=12),
-            text_color="#64748B",
+            font=ctk.CTkFont(size=12), text_color="#64748B",
         ).grid(row=2, column=0, padx=20, pady=(0, 16), sticky="w")
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
     def _open_set_limit_dialog(self):
+        # Pass _load_rows so the dialog can trigger a refresh after saving
         SetLimitDialog(self, self.user, self.year, self.month, on_save=self._load_rows)
 
     def _copy_last_month(self):
+        # Copies previous month's limits; shows info if nothing to copy
         copied = copy_budgets_from_previous_month(self.user, self.year, self.month)
         if copied:
             self._load_rows()
@@ -190,12 +196,12 @@ class SetLimitDialog(ctk.CTkToplevel):
         self.user    = user
         self.year    = year
         self.month   = month
-        self.on_save = on_save
+        self.on_save = on_save  # callback — called after successful save
 
         self.title("Set Budget Limit")
         self.geometry("380x320")
         self.resizable(False, False)
-        self.grab_set()
+        self.grab_set()  # modal — blocks the main window
 
         self.grid_columnconfigure(0, weight=1)
         self._build()
@@ -206,10 +212,12 @@ class SetLimitDialog(ctk.CTkToplevel):
         ctk.CTkLabel(self, text="Category", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=0, column=0, padx=28, pady=(28, 4), sticky="w")
 
-        categories  = list(Category.select().where(
+        # Only show expense categories — income doesn't have budget limits
+        categories = list(Category.select().where(
             (Category.user == self.user) | (Category.user.is_null()),
             Category.type == "expense",
         ).order_by(Category.name))
+
         self.cat_map = {f"{c.icon} {c.name}": c for c in categories}
         self.cat_var = ctk.StringVar(value=list(self.cat_map.keys())[0])
 
@@ -222,6 +230,7 @@ class SetLimitDialog(ctk.CTkToplevel):
         ctk.CTkLabel(self, text="Monthly Limit", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=2, column=0, padx=28, pady=(16, 4), sticky="w")
 
+        # Large font — limit amount is the key input in this dialog
         self.limit_entry = ctk.CTkEntry(
             self, placeholder_text="500.00",
             font=ctk.CTkFont(size=22, weight="bold"),
@@ -246,7 +255,8 @@ class SetLimitDialog(ctk.CTkToplevel):
             messagebox.showerror("Error", "Invalid amount. Enter a number like 500.00")
             return
 
+        # Retrieve the Category object from the display string
         category = self.cat_map.get(self.cat_var.get())
         set_budget(self.user, category, limit_cents, self.year, self.month)
-        self.on_save()
-        self.destroy()
+        self.on_save()   # refresh the budget list
+        self.destroy()   # close the dialog
