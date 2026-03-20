@@ -115,20 +115,21 @@ class App(ctk.CTk):
             return DashboardPage(self.main_area, self.user, self)
 
         if page_id == "transactions":
-            from ui.pages.placeholder import PlaceholderPage
-            return PlaceholderPage(self.main_area, "📋", "Transactions", "Coming in Stage 3")
+            from ui.pages.transactions import TransactionsPage
+            return TransactionsPage(self.main_area, self.user, self)
 
         if page_id == "budget":
-            from ui.pages.placeholder import PlaceholderPage
-            return PlaceholderPage(self.main_area, "📊", "Budget", "Coming in Stage 3")
+            from ui.pages.budget import BudgetPage
+            return BudgetPage(self.main_area, self.user, self)
+
+        if page_id == "goals":
+            from ui.pages.goals import GoalsPage
+            return GoalsPage(self.main_area, self.user, self)
 
         if page_id == "analytics":
             from ui.pages.placeholder import PlaceholderPage
             return PlaceholderPage(self.main_area, "📈", "Analytics", "Coming in Stage 4")
 
-        if page_id == "goals":
-            from ui.pages.placeholder import PlaceholderPage
-            return PlaceholderPage(self.main_area, "🎯", "Goals", "Coming in Stage 3")
 
         if page_id == "settings":
             from ui.pages.placeholder import PlaceholderPage
