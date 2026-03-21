@@ -75,8 +75,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName':               'BudgetWise',
         'CFBundleDisplayName':        'BudgetWise',
-        'CFBundleVersion':            '1.0.0',
-        'CFBundleShortVersionString': '1.0.0',
+        'CFBundleVersion':            '1.1.0',
+        'CFBundleShortVersionString': '1.1.0',
         'NSHighResolutionCapable':    True,
         'NSRequiresAquaSystemAppearance': False,
         'LSMinimumSystemVersion':     '10.13.0',
