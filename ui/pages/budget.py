@@ -35,7 +35,6 @@ class BudgetPage(ctk.CTkFrame):
     # ── Header ────────────────────────────────────────────────────────────────
 
     def _build_header(self):
-        # White top bar with page title and action buttons
         header = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=0, height=72)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_columnconfigure(1, weight=1)
@@ -47,11 +46,26 @@ class BudgetPage(ctk.CTkFrame):
             text_color="#1E293B",
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
 
-        # Group the two buttons together on the right
+        # Month selector
+        months = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        self.month_var = ctk.StringVar(value=months[self.month - 1])
+
+        ctk.CTkOptionMenu(
+            header,
+            values=months,
+            variable=self.month_var,
+            width=140, height=34, corner_radius=8,
+            font=ctk.CTkFont(size=13),
+            command=self._on_month_change,
+        ).grid(row=0, column=1, padx=0, pady=16)
+
+        # Buttons
         btn_frame = ctk.CTkFrame(header, fg_color="transparent")
         btn_frame.grid(row=0, column=2, padx=32, pady=12, sticky="e")
 
-        # Copies all limits from the previous month into the current month
         ctk.CTkButton(
             btn_frame, text="Copy last month",
             width=140, height=36, corner_radius=8,
@@ -60,7 +74,6 @@ class BudgetPage(ctk.CTkFrame):
             command=self._copy_last_month,
         ).grid(row=0, column=0, padx=(0, 8))
 
-        # Opens the SetLimitDialog to add a new budget limit
         ctk.CTkButton(
             btn_frame, text="+ Set Limit",
             width=120, height=36, corner_radius=8,
@@ -70,6 +83,17 @@ class BudgetPage(ctk.CTkFrame):
         ).grid(row=0, column=1)
 
     # ── Body ──────────────────────────────────────────────────────────────────
+
+
+
+    def _on_month_change(self, value):   # ← должен быть здесь
+        months = [
+            "January","February","March","April","May","June",
+            "July","August","September","October","November","December"
+        ]
+        self.month = months.index(value) + 1
+        self._load_rows()
+
 
     def _build_body(self):
         # Scrollable area holds one card per budget category

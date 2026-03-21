@@ -7,8 +7,6 @@ import customtkinter as ctk
 from datetime import date
 from calendar import monthrange
 
-import matplotlib
-matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
@@ -32,6 +30,7 @@ class AnalyticsPage(ctk.CTkFrame):
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
 
         self._build_header()
         self._build_body()
@@ -52,8 +51,8 @@ class AnalyticsPage(ctk.CTkFrame):
 
         # Month selector
         months = [
-            "January","February","March","April","May","June",
-            "July","August","September","October","November","December"
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
         ]
         self.month_var = ctk.StringVar(value=months[self.month - 1])
 
@@ -68,11 +67,13 @@ class AnalyticsPage(ctk.CTkFrame):
 
     def _on_month_change(self, value):
         months = [
-            "January","February","March","April","May","June",
-            "July","August","September","October","November","December"
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
         ]
         self.month = months.index(value) + 1
         self._refresh()
+
+
 
     # ── Body ──────────────────────────────────────────────────────────────────
 
@@ -80,8 +81,10 @@ class AnalyticsPage(ctk.CTkFrame):
         self.scroll = ctk.CTkScrollableFrame(
             self, fg_color="#F8FAFC", corner_radius=0
         )
-        self.scroll.grid(row=1, column=0, sticky="nsew")
+        self.scroll.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
         self.scroll.grid_columnconfigure(0, weight=1)
+        # Force layout update before rendering charts
+        self.update_idletasks()
         self._render_charts()
 
     def _refresh(self):
@@ -90,13 +93,13 @@ class AnalyticsPage(ctk.CTkFrame):
         self._render_charts()
 
     def _render_charts(self):
-        last_day  = monthrange(self.year, self.month)[1]
+        last_day = monthrange(self.year, self.month)[1]
         date_from = date(self.year, self.month, 1)
-        date_to   = date(self.year, self.month, last_day)
+        date_to = date(self.year, self.month, last_day)
 
-        summary    = get_month_summary(self.user, self.year, self.month)
+        summary = get_month_summary(self.user, self.year, self.month)
         categories = get_spending_by_category(self.user, date_from, date_to)
-        daily      = get_daily_totals(self.user, date_from, date_to)
+        daily = get_daily_totals(self.user, date_from, date_to)
 
         self._build_summary_cards(summary)
         self._build_pie_chart(categories)

@@ -1,47 +1,43 @@
 # BudgetWise.spec
-# PyInstaller build configuration for macOS .app
-# Run with: pyinstaller BudgetWise.spec
-
 import os
 from PyInstaller.building.api import PYZ, EXE, COLLECT
 from PyInstaller.building.build_main import Analysis
 from PyInstaller.building.osx import BUNDLE
+from PyInstaller.utils.hooks import collect_all
 
-# Project root directory
 ROOT = os.path.dirname(os.path.abspath(SPEC))
 
+# Collect numpy and matplotlib fully — fixes "cannot load module twice" error
+numpy_datas, numpy_binaries, numpy_hiddenimports = collect_all('numpy')
+mpl_datas, mpl_binaries, mpl_hiddenimports = collect_all('matplotlib')
+
 a = Analysis(
-    # Entry point
     [os.path.join(ROOT, 'main.py')],
-
     pathex=[ROOT],
-
-    # All packages that need to be bundled
     hiddenimports=[
-        'customtkinter',
-        'PIL',
-        'PIL._tkinter_finder',
-        'matplotlib',
-        'matplotlib.backends.backend_tkagg',
-        'peewee',
-        'plyer',
-        'plyer.platforms.macosx.notification',
-    ],
-
-    # Data files to include (non-Python files)
+                      'customtkinter',
+                      'PIL',
+                      'PIL._tkinter_finder',
+                      'peewee',
+                      'plyer',
+                      'plyer.platforms.macosx.notification',
+                      'numpy._core._exceptions',
+                      'numpy._core._multiarray_umath',
+                      'numpy._core.multiarray',
+                      'numpy._core._methods',
+                      'numpy._core.numeric',
+                      'numpy._core.umath',
+                      'numpy.lib.stride_tricks',
+                  ] + numpy_hiddenimports + mpl_hiddenimports,
     datas=[
-        (
-        '/Users/nickolaimakaronok/Documents/DevelopAndProgramming/budgetwise/.venv/lib/python3.12/site-packages/customtkinter',
-        'customtkinter/'),
-    ],
-
-    # No extra binaries needed
-    binaries=[],
-
+        ('/Users/nickolaimakaronok/Documents/DevelopAndProgramming/budgetwise/.venv/lib/python3.12/site-packages/customtkinter',
+         'customtkinter/'),
+    ] + numpy_datas + mpl_datas,
+    binaries=[] + numpy_binaries + mpl_binaries,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['conda', 'conda_package_handling', 'conda_env'],
     noarchive=False,
 )
 
@@ -57,7 +53,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,      # No terminal window on launch
+    console=False,
     icon='assets/BudgetWise.icns',
 )
 
@@ -71,21 +67,18 @@ coll = COLLECT(
     name='BudgetWise',
 )
 
-# Create the .app bundle
 app = BUNDLE(
     coll,
     name='BudgetWise.app',
     icon='assets/BudgetWise.icns',
     bundle_identifier='com.budgetwise.app',
-
-    # macOS app metadata
     info_plist={
-        'CFBundleName':             'BudgetWise',
-        'CFBundleDisplayName':      'BudgetWise',
-        'CFBundleVersion':          '1.0.0',
+        'CFBundleName':               'BudgetWise',
+        'CFBundleDisplayName':        'BudgetWise',
+        'CFBundleVersion':            '1.0.0',
         'CFBundleShortVersionString': '1.0.0',
-        'NSHighResolutionCapable':  True,
-        'NSRequiresAquaSystemAppearance': False,  # supports dark mode
-        'LSMinimumSystemVersion':   '10.13.0',
+        'NSHighResolutionCapable':    True,
+        'NSRequiresAquaSystemAppearance': False,
+        'LSMinimumSystemVersion':     '10.13.0',
     },
 )

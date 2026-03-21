@@ -33,13 +33,13 @@ def add_goal(user, name, target_cents, icon="🎯"):
 
 
 def contribute_to_goal(goal, amount_cents):
-    """Adds an amount to a goal. Marks it completed if target is reached."""
+    """Adds amount to goal. Marks completed if target is reached."""
+    from db.database import db
     with db:
         goal.current_cents += amount_cents
         if goal.current_cents >= goal.target_cents:
             goal.status = "completed"
         goal.save()
-
 
 def archive_goal(goal):
     """Soft-deletes a goal by setting its status to 'archived'."""
