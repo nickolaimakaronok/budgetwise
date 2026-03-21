@@ -38,6 +38,30 @@
 
 ---
 
+
+## Screenshots
+
+### Dashboard
+![Dashboard](screenshots/Dashboard_screenshot.png)
+
+### Transactions
+![Transactions](screenshots/Transactions_screenshot.png)
+
+### Budget
+![Budget](screenshots/Budget_screenshot.png)
+
+### Analytics
+![Analytics](screenshots/Analytics_screenshot.png)
+
+### Goals
+![Goals](screenshots/Goals_screenshot.png)
+
+### Settings1
+![Goals](screenshots/Settings_screenshot1.png)
+
+### Settings2
+![Goals](screenshots/Settings_screenshot2.png)
+
 ## Requirements
 
 ### System
