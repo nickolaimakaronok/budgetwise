@@ -103,6 +103,9 @@ class SettingsPage(ctk.CTkFrame):
         set_currency(self.user.currency)
         messagebox.showinfo("Saved", "Profile updated successfully.")
 
+
+
+
     # ── Appearance section ────────────────────────────────────────────────────
 
     def _section_appearance(self, parent, row):
@@ -238,6 +241,15 @@ class SettingsPage(ctk.CTkFrame):
             command=self._open_backup_folder,
         ).grid(row=0, column=1, padx=(8, 0), sticky="ew")
 
+        ctk.CTkButton(
+            card, text="🔔 Test Notifications",
+            height=40, corner_radius=8,
+            fg_color="#F1F5F9", hover_color="#E2E8F0",
+            text_color="#1E293B",
+            font=ctk.CTkFont(size=13),
+            command=self._test_notifications,
+        ).grid(row=3, column=0, padx=24, pady=(0, 24), sticky="ew")
+
     def _backup(self):
         backup_dir = os.path.join(os.path.dirname(DB_PATH), "backups")
         os.makedirs(backup_dir, exist_ok=True)
@@ -270,3 +282,19 @@ class SettingsPage(ctk.CTkFrame):
             parent, text=text,
             font=ctk.CTkFont(size=13), text_color="#64748B",
         ).grid(row=row, column=0, padx=24, pady=(0, 4), sticky="w")
+
+    def _test_notifications(self):
+        """Manually triggers a budget check and shows how many notifications were sent."""
+        from utils.notifications import check_now
+        sent = check_now(self.user)
+        if sent == 0:
+            messagebox.showinfo(
+                "Notifications",
+                "No budget limits exceeded or in warning zone.\n"
+                "Add budget limits and transactions to test."
+            )
+        else:
+            messagebox.showinfo(
+                "Notifications",
+                f"Sent {sent} notification(s).\nCheck your macOS notification center."
+            )

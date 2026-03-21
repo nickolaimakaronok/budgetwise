@@ -21,13 +21,21 @@ from utils.constants import APP_NAME, APP_VERSION
 
 def main():
     print(f"🚀 Starting {APP_NAME} v{APP_VERSION}")
+
+    # 1. Init database
     init_db()
 
+    # 2. Get or create default user
     from models.models import User
     user = User.get_or_none(User.id == 1)
     if user is None:
         user = User.create(name="Me", currency="USD")
 
+    # 3. Start background notification worker
+    from utils.notifications import start_notification_worker
+    start_notification_worker(user)
+
+    # 4. Launch UI
     ctk.set_appearance_mode("Light")
     ctk.set_default_color_theme("blue")
 
