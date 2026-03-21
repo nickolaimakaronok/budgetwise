@@ -1,6 +1,12 @@
 """
 ui/pages/transactions.py
-Transactions page — table with all transactions + add/edit/delete/filter/export.
+Transactions page — full CRUD for transactions with filters and CSV export.
+
+Layout (top to bottom):
+  Row 0 — Header bar (title + Export CSV + Add Transaction buttons)
+  Row 1 — Filter bar (type toggle, category dropdown, date range, Apply/Reset)
+  Row 2 — Column headers (grey bar)
+  Row 3 — Scrollable transaction rows
 """
 
 import csv
@@ -14,21 +20,33 @@ from utils.formatters import format_money_short, format_date, set_currency, pars
 
 
 class TransactionsPage(ctk.CTkFrame):
+    """
+    Main transactions page.
+    Shows all transactions in a scrollable table.
+    Supports filtering by type, category and date range.
+    Supports adding, editing, deleting and exporting transactions.
+    """
 
     def __init__(self, parent, user, app):
         super().__init__(parent, fg_color="#F8FAFC", corner_radius=0)
         self.user = user
         self.app  = app
+
+        # Apply user's currency symbol to all money formatters
         set_currency(user.currency)
 
-        # Active filters
-        self.filter_type     = "all"     # "all" | "income" | "expense"
-        self.filter_category = None      # Category object or None
-        self.filter_date_from = None
-        self.filter_date_to   = None
+        # ── Active filter state ───────────────────────────────────────────────
+        # These are read by _load_rows() every time the table refreshes.
+        # Filters are combined — all active filters apply simultaneously.
+        self.filter_type      = "all"   # "all" | "income" | "expense"
+        self.filter_category  = None    # Category object or None (= show all)
+        self.filter_date_from = None    # date object or None (= no lower bound)
+        self.filter_date_to   = None    # date object or None (= no upper bound)
 
+        # Column 0 stretches to fill the window width
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        # Row 3 (scrollable table) takes all remaining vertical space
+        self.grid_rowconfigure(3, weight=1)
 
         self._build_header()
         self._build_filters()
@@ -37,10 +55,15 @@ class TransactionsPage(ctk.CTkFrame):
     # ── Header ────────────────────────────────────────────────────────────────
 
     def _build_header(self):
+        """
+        White top bar with page title and two action buttons:
+        - Export CSV: saves the currently filtered transactions to a .csv file
+        - Add Transaction: opens the AddTransactionDialog popup
+        """
         header = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=0, height=72)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_columnconfigure(0, weight=1)
-        header.grid_propagate(False)
+        header.grid_propagate(False)  # keeps header fixed at 72px
 
         ctk.CTkLabel(
             header, text="Transactions",
@@ -48,10 +71,11 @@ class TransactionsPage(ctk.CTkFrame):
             text_color="#1E293B",
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
 
+        # Group both buttons together on the right side
         btn_frame = ctk.CTkFrame(header, fg_color="transparent")
         btn_frame.grid(row=0, column=1, padx=32, pady=16, sticky="e")
 
-        # Export CSV button
+        # Export CSV — grey secondary button
         ctk.CTkButton(
             btn_frame, text="⬇ Export CSV",
             width=130, height=36, corner_radius=8,
@@ -61,7 +85,7 @@ class TransactionsPage(ctk.CTkFrame):
             command=self._export_csv,
         ).grid(row=0, column=0, padx=(0, 8))
 
-        # Add transaction button
+        # Add Transaction — primary blue button
         ctk.CTkButton(
             btn_frame, text="+ Add Transaction",
             width=160, height=36, corner_radius=8,
@@ -73,12 +97,20 @@ class TransactionsPage(ctk.CTkFrame):
     # ── Filters ───────────────────────────────────────────────────────────────
 
     def _build_filters(self):
+        """
+        Filter bar between the header and the table.
+        Contains three filter types that can be combined:
+          1. Type segmented button — All / Income / Expense (instant)
+          2. Category dropdown — pick a specific category (instant)
+          3. Date range — From / To fields with Apply button (manual)
+        Reset button clears all filters at once.
+        """
         filters = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=0, height=56)
         filters.grid(row=1, column=0, sticky="ew")
         filters.grid_propagate(False)
-        filters.grid_columnconfigure(4, weight=1)
+        filters.grid_columnconfigure(4, weight=1)  # spacer column pushes date fields right
 
-        # Type filter
+        # ── 1. Type filter: All / Income / Expense ────────────────────────────
         self.type_var = ctk.StringVar(value="All")
         ctk.CTkSegmentedButton(
             filters,
@@ -86,14 +118,16 @@ class TransactionsPage(ctk.CTkFrame):
             variable=self.type_var,
             font=ctk.CTkFont(size=12),
             width=200, height=32,
-            command=self._on_type_filter,
+            command=self._on_type_filter,  # fires immediately on click
         ).grid(row=0, column=0, padx=(32, 12), pady=12)
 
-        # Category filter
+        # ── 2. Category filter: dropdown with all user + system categories ────
+        # Build a dict mapping display string → Category object for easy lookup
         categories = list(Category.select().where(
             (Category.user == self.user) | (Category.user.is_null())
         ).order_by(Category.name))
-        self.cat_options = {"All categories": None}
+
+        self.cat_options = {"All categories": None}  # None = no category filter
         for c in categories:
             self.cat_options[f"{c.icon} {c.name}"] = c
 
@@ -104,10 +138,10 @@ class TransactionsPage(ctk.CTkFrame):
             variable=self.cat_var,
             width=180, height=32, corner_radius=6,
             font=ctk.CTkFont(size=12),
-            command=self._on_category_filter,
+            command=self._on_category_filter,  # fires immediately on selection
         ).grid(row=0, column=1, padx=(0, 12), pady=12)
 
-        # Date from
+        # ── 3. Date range filter: From + To fields ────────────────────────────
         ctk.CTkLabel(
             filters, text="From:",
             font=ctk.CTkFont(size=12), text_color="#64748B",
@@ -120,7 +154,6 @@ class TransactionsPage(ctk.CTkFrame):
         )
         self.date_from_entry.grid(row=0, column=3, padx=(0, 8), pady=12)
 
-        # Date to
         ctk.CTkLabel(
             filters, text="To:",
             font=ctk.CTkFont(size=12), text_color="#64748B",
@@ -133,7 +166,7 @@ class TransactionsPage(ctk.CTkFrame):
         )
         self.date_to_entry.grid(row=0, column=5, padx=(0, 8), pady=12)
 
-        # Apply filter button
+        # Apply — parses the date fields and refreshes the table
         ctk.CTkButton(
             filters, text="Apply",
             width=70, height=32, corner_radius=6,
@@ -142,7 +175,7 @@ class TransactionsPage(ctk.CTkFrame):
             command=self._apply_date_filter,
         ).grid(row=0, column=6, padx=(0, 8), pady=12)
 
-        # Reset filters button
+        # Reset — clears ALL active filters (type + category + dates)
         ctk.CTkButton(
             filters, text="Reset",
             width=70, height=32, corner_radius=6,
@@ -152,55 +185,79 @@ class TransactionsPage(ctk.CTkFrame):
             command=self._reset_filters,
         ).grid(row=0, column=7, padx=(0, 32), pady=12)
 
-    def _on_type_filter(self, value):
-        self.filter_type = value.lower()
+    def _on_type_filter(self, value: str):
+        """Called instantly when user clicks All / Income / Expense."""
+        self.filter_type = value.lower()  # "all" | "income" | "expense"
         self._load_rows()
 
-    def _on_category_filter(self, value):
-        self.filter_category = self.cat_options.get(value)
+    def _on_category_filter(self, value: str):
+        """Called instantly when user selects a category from the dropdown."""
+        self.filter_category = self.cat_options.get(value)  # Category or None
         self._load_rows()
 
     def _apply_date_filter(self):
+        """
+        Reads the From/To date fields, validates them, and refreshes the table.
+        Empty field = no bound on that side (e.g. empty From = from the beginning).
+        Shows an error dialog if the format is wrong.
+        """
         from_text = self.date_from_entry.get().strip()
         to_text   = self.date_to_entry.get().strip()
+
         try:
             self.filter_date_from = parse_date(from_text) if from_text else None
         except ValueError:
             messagebox.showerror("Error", "Invalid 'From' date. Use DD.MM.YYYY")
             return
+
         try:
             self.filter_date_to = parse_date(to_text) if to_text else None
         except ValueError:
             messagebox.showerror("Error", "Invalid 'To' date. Use DD.MM.YYYY")
             return
+
         self._load_rows()
 
     def _reset_filters(self):
+        """
+        Clears all active filters and resets all filter widgets to their defaults.
+        Then refreshes the table to show all transactions.
+        """
+        # Reset filter state
         self.filter_type      = "all"
         self.filter_category  = None
         self.filter_date_from = None
         self.filter_date_to   = None
+
+        # Reset widgets to their default visual state
         self.type_var.set("All")
         self.cat_var.set("All categories")
         self.date_from_entry.delete(0, "end")
         self.date_to_entry.delete(0, "end")
+
         self._load_rows()
 
     # ── Table ─────────────────────────────────────────────────────────────────
 
     def _build_table(self):
+        """
+        Builds the static column header row and the scrollable rows container.
+        The header row is a fixed-height grey bar, never scrolls.
+        The rows container is a CTkScrollableFrame that fills remaining space.
+        """
+        # Fixed grey header row with column labels
         headers_frame = ctk.CTkFrame(self, fg_color="#F1F5F9", corner_radius=0, height=40)
         headers_frame.grid(row=2, column=0, sticky="ew", padx=32, pady=(8, 0))
         headers_frame.grid_propagate(False)
-        headers_frame.grid_columnconfigure(1, weight=1)
+        headers_frame.grid_columnconfigure(1, weight=1)  # Category column stretches
 
         for col, (text, width) in enumerate([
-            ("",         40),
-            ("Category",  0),
+            ("",         40),   # emoji icon — no label needed
+            ("Category",  0),   # stretches to fill available space
             ("Date",    100),
             ("Note",    180),
             ("Amount",  120),
-            ("",        120),  # actions column — wider for two buttons
+            ("",        120),   # actions column — wider to fit two buttons
         ]):
             ctk.CTkLabel(
                 headers_frame, text=text,
@@ -208,6 +265,8 @@ class TransactionsPage(ctk.CTkFrame):
                 text_color="#64748B", width=width, anchor="w",
             ).grid(row=0, column=col, padx=(12 if col == 0 else 8, 8), pady=10, sticky="w")
 
+        # Scrollable container for transaction rows
+        # Fills all remaining vertical space (row 3 has weight=1)
         self.rows_frame = ctk.CTkScrollableFrame(
             self, fg_color="#FFFFFF", corner_radius=12
         )
@@ -218,9 +277,16 @@ class TransactionsPage(ctk.CTkFrame):
         self._load_rows()
 
     def _load_rows(self):
+        """
+        Clears and re-renders all transaction rows.
+        Applies all active filters before fetching from the database.
+        Called on first load and after every add / edit / delete / filter change.
+        """
+        # Destroy all existing row widgets before re-rendering
         for widget in self.rows_frame.winfo_children():
             widget.destroy()
 
+        # Convert "all" to None because get_transactions() expects None = no filter
         type_filter = None if self.filter_type == "all" else self.filter_type
 
         txs = get_transactions(
@@ -232,6 +298,7 @@ class TransactionsPage(ctk.CTkFrame):
         )
 
         if not txs:
+            # Empty state — shown when no transactions match the current filters
             ctk.CTkLabel(
                 self.rows_frame,
                 text="No transactions found.",
@@ -240,31 +307,52 @@ class TransactionsPage(ctk.CTkFrame):
             ).grid(row=0, column=0, columnspan=6, pady=48)
             return
 
+        # Alternating row background for readability (zebra striping)
         for i, tx in enumerate(txs):
             bg = "#FFFFFF" if i % 2 == 0 else "#F8FAFC"
             self._transaction_row(i, tx, bg)
 
-    def _transaction_row(self, row_idx, tx, bg):
+    def _transaction_row(self, row_idx: int, tx, bg: str):
+        """
+        Renders a single transaction as a fixed-height row with 6 columns:
+          0 — Category emoji icon
+          1 — Category name (stretches)
+          2 — Date
+          3 — Note (truncated at 28 chars)
+          4 — Amount (green for income, red for expense)
+          5 — Action buttons: Edit (✏️) and Delete (🗑)
+        """
+        # Fixed-height frame for this row — prevents rows from changing size
         f = ctk.CTkFrame(self.rows_frame, fg_color=bg, corner_radius=0, height=52)
         f.grid(row=row_idx, column=0, columnspan=6, sticky="ew", pady=0)
-        f.grid_columnconfigure(1, weight=1)
-        f.grid_propagate(False)
+        f.grid_columnconfigure(1, weight=1)  # category name stretches
+        f.grid_propagate(False)              # keeps height fixed at 52px
 
+        # Fall back to generic icon/name if no category is set
         icon = tx.category.icon if tx.category else "💳"
         name = tx.category.name if tx.category else "Uncategorized"
 
+        # Col 0 — Category emoji
         ctk.CTkLabel(f, text=icon, font=ctk.CTkFont(size=18), width=40
                      ).grid(row=0, column=0, padx=(16, 4), pady=14)
+
+        # Col 1 — Category name (stretches to fill space)
         ctk.CTkLabel(f, text=name, font=ctk.CTkFont(size=14),
                      text_color="#1E293B", anchor="w"
                      ).grid(row=0, column=1, padx=8, sticky="w")
+
+        # Col 2 — Date formatted as DD.MM.YYYY
         ctk.CTkLabel(f, text=format_date(tx.date), font=ctk.CTkFont(size=13),
                      text_color="#64748B", width=100
                      ).grid(row=0, column=2, padx=8)
-        ctk.CTkLabel(f, text=tx.note[:28] + "…" if len(tx.note) > 28 else tx.note,
+
+        # Col 3 — Note truncated at 28 characters to avoid overflow
+        note_text = tx.note[:28] + "…" if len(tx.note) > 28 else tx.note
+        ctk.CTkLabel(f, text=note_text,
                      font=ctk.CTkFont(size=13), text_color="#94A3B8", width=180, anchor="w"
                      ).grid(row=0, column=3, padx=8, sticky="w")
 
+        # Col 4 — Amount: green + prefix for income, red - prefix for expense
         color = "#16A34A" if tx.type == "income" else "#DC2626"
         sign  = "+" if tx.type == "income" else "-"
         ctk.CTkLabel(
@@ -273,11 +361,11 @@ class TransactionsPage(ctk.CTkFrame):
             text_color=color, width=120,
         ).grid(row=0, column=4, padx=8)
 
-        # Action buttons frame
+        # Col 5 — Action buttons (Edit + Delete) side by side
         action_frame = ctk.CTkFrame(f, fg_color="transparent")
         action_frame.grid(row=0, column=5, padx=(4, 16))
 
-        # Edit button
+        # Edit button — opens EditTransactionDialog pre-filled with this tx's data
         ctk.CTkButton(
             action_frame, text="✏️", width=32, height=28,
             corner_radius=6, fg_color="transparent",
@@ -285,7 +373,7 @@ class TransactionsPage(ctk.CTkFrame):
             command=lambda t=tx: self._open_edit_dialog(t),
         ).grid(row=0, column=0, padx=(0, 4))
 
-        # Delete button
+        # Delete button — asks for confirmation before permanently deleting
         ctk.CTkButton(
             action_frame, text="🗑", width=32, height=28,
             corner_radius=6, fg_color="transparent",
@@ -296,7 +384,18 @@ class TransactionsPage(ctk.CTkFrame):
     # ── Export CSV ────────────────────────────────────────────────────────────
 
     def _export_csv(self):
-        # Ask user where to save
+        """
+        Exports the currently visible (filtered) transactions to a CSV file.
+        Steps:
+          1. Opens a save-file dialog to let the user pick a location
+          2. Fetches transactions using the same active filters as the table
+          3. Writes CSV with columns: Date, Type, Category, Amount, Note
+          4. Shows a success message with the file path and row count
+
+        Respects all active filters — if the user filtered by March expenses,
+        only March expenses will appear in the exported file.
+        """
+        # Ask user where to save — returns empty string if cancelled
         filepath = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV files", "*.csv")],
@@ -304,8 +403,9 @@ class TransactionsPage(ctk.CTkFrame):
             title="Export transactions to CSV",
         )
         if not filepath:
-            return  # user cancelled
+            return  # user clicked Cancel
 
+        # Fetch same transactions that are currently shown in the table
         type_filter = None if self.filter_type == "all" else self.filter_type
         txs = get_transactions(
             self.user,
@@ -315,31 +415,39 @@ class TransactionsPage(ctk.CTkFrame):
             category=self.filter_category,
         )
 
+        # Write CSV using Python's built-in csv module (no extra libraries needed)
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            # Header row
-            writer.writerow(["Date", "Type", "Category", "Amount", "Note"])
-            # Data rows
+            writer.writerow(["Date", "Type", "Category", "Amount", "Note"])  # header
             for tx in txs:
                 writer.writerow([
                     format_date(tx.date),
                     tx.type,
                     tx.category.name if tx.category else "Uncategorized",
-                    tx.amount_cents / 100,
+                    tx.amount_cents / 100,  # convert cents back to decimal for readability
                     tx.note,
                 ])
 
-        messagebox.showinfo("Export complete", f"Saved {len(txs)} transactions to:\n{filepath}")
+        messagebox.showinfo(
+            "Export complete",
+            f"Saved {len(txs)} transactions to:\n{filepath}"
+        )
 
-    # ── Dialogs ───────────────────────────────────────────────────────────────
+    # ── Dialog openers ────────────────────────────────────────────────────────
 
     def _open_add_dialog(self):
+        """Opens the Add dialog. Passes _load_rows as callback to refresh after save."""
         AddTransactionDialog(self, self.user, on_save=self._load_rows)
 
     def _open_edit_dialog(self, tx):
+        """Opens the Edit dialog pre-filled with the given transaction's data."""
         EditTransactionDialog(self, self.user, tx, on_save=self._load_rows)
 
     def _delete(self, tx):
+        """
+        Shows a confirmation dialog before permanently deleting the transaction.
+        Refreshes the table if the user confirms.
+        """
         ok = messagebox.askyesno(
             "Delete transaction",
             f"Delete this transaction?\n"
@@ -348,38 +456,48 @@ class TransactionsPage(ctk.CTkFrame):
         )
         if ok:
             delete_transaction(tx)
-            self._load_rows()
+            self._load_rows()  # refresh table after deletion
 
 
 # ── Add Transaction Dialog ────────────────────────────────────────────────────
 
 class AddTransactionDialog(ctk.CTkToplevel):
+    """
+    Modal dialog for creating a new transaction.
+    Fields: Type (Expense/Income), Amount, Category, Date, Note.
+    All fields start empty (Date is pre-filled with today).
+    Calls on_save() after successfully saving to refresh the parent table.
+    """
 
     def __init__(self, parent, user, on_save):
         super().__init__(parent)
         self.user    = user
-        self.on_save = on_save
+        self.on_save = on_save  # callback — called after successful save
 
         self.title("Add Transaction")
         self.geometry("420x520")
         self.resizable(False, False)
-        self.grab_set()
+        self.grab_set()  # modal — blocks interaction with the main window
         self.grid_columnconfigure(0, weight=1)
         self._build()
 
     def _build(self):
+        """Builds all form fields."""
         pad = {"padx": 28, "sticky": "ew"}
 
-        self.type_var = ctk.StringVar(value="expense")
+        # ── Type toggle: Expense / Income ─────────────────────────────────────
+        self.type_var = ctk.StringVar(value="expense")  # default to expense
         toggle = ctk.CTkFrame(self, fg_color="#F1F5F9", corner_radius=8)
         toggle.grid(row=0, column=0, padx=28, pady=(28, 0), sticky="ew")
         toggle.grid_columnconfigure((0, 1), weight=1)
+
         for col, (label, val) in enumerate([("Expense", "expense"), ("Income", "income")]):
             ctk.CTkRadioButton(
                 toggle, text=label, variable=self.type_var, value=val,
                 font=ctk.CTkFont(size=14, weight="bold"),
             ).grid(row=0, column=col, padx=16, pady=12)
 
+        # ── Amount field (large font — most important input) ──────────────────
         ctk.CTkLabel(self, text="Amount", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=1, column=0, padx=28, pady=(20, 4), sticky="w")
         self.amount_entry = ctk.CTkEntry(
@@ -388,13 +506,17 @@ class AddTransactionDialog(ctk.CTkToplevel):
             height=52, corner_radius=8,
         )
         self.amount_entry.grid(row=2, column=0, **pad)
-        self.amount_entry.focus()
+        self.amount_entry.focus()  # cursor jumps here when dialog opens
 
+        # ── Category dropdown ─────────────────────────────────────────────────
+        # Loads both system categories (user=NULL) and user's own categories
         ctk.CTkLabel(self, text="Category", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=3, column=0, padx=28, pady=(16, 4), sticky="w")
         categories = list(Category.select().where(
             (Category.user == self.user) | (Category.user.is_null())
         ).order_by(Category.name))
+
+        # Map "🛒 Groceries" → Category object for easy lookup on save
         self.cat_map = {f"{c.icon} {c.name}": c for c in categories}
         self.cat_var = ctk.StringVar(value=list(self.cat_map.keys())[0])
         ctk.CTkOptionMenu(
@@ -403,15 +525,18 @@ class AddTransactionDialog(ctk.CTkToplevel):
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         ).grid(row=4, column=0, **pad)
 
+        # ── Date field ────────────────────────────────────────────────────────
         ctk.CTkLabel(self, text="Date", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=5, column=0, padx=28, pady=(16, 4), sticky="w")
         self.date_entry = ctk.CTkEntry(
             self, placeholder_text="DD.MM.YYYY",
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         )
+        # Pre-fill with today so user doesn't have to type it most of the time
         self.date_entry.insert(0, date.today().strftime("%d.%m.%Y"))
         self.date_entry.grid(row=6, column=0, **pad)
 
+        # ── Note field (optional) ─────────────────────────────────────────────
         ctk.CTkLabel(self, text="Note (optional)", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=7, column=0, padx=28, pady=(16, 4), sticky="w")
         self.note_entry = ctk.CTkEntry(
@@ -420,6 +545,7 @@ class AddTransactionDialog(ctk.CTkToplevel):
         )
         self.note_entry.grid(row=8, column=0, **pad)
 
+        # ── Save button ───────────────────────────────────────────────────────
         ctk.CTkButton(
             self, text="Save Transaction",
             height=48, corner_radius=8,
@@ -429,19 +555,29 @@ class AddTransactionDialog(ctk.CTkToplevel):
         ).grid(row=9, column=0, padx=28, pady=28, sticky="ew")
 
     def _save(self):
+        """
+        Validates all inputs, creates the transaction, then closes the dialog.
+        Shows an error popup if amount or date is invalid.
+        """
         from services.transaction_service import add_transaction
+
+        # Validate amount — parse_money raises ValueError on bad input
         try:
             amount_cents = parse_money(self.amount_entry.get())
         except ValueError:
             messagebox.showerror("Error", "Invalid amount. Enter a number like 150.50")
             return
+
+        # Validate date — parse_date raises ValueError on wrong format
         try:
             tx_date = parse_date(self.date_entry.get())
         except ValueError:
             messagebox.showerror("Error", "Invalid date. Use DD.MM.YYYY format")
             return
 
+        # Look up the Category object from the display string
         category = self.cat_map.get(self.cat_var.get())
+
         add_transaction(
             user=self.user,
             type=self.type_var.get(),
@@ -450,53 +586,64 @@ class AddTransactionDialog(ctk.CTkToplevel):
             tx_date=tx_date,
             note=self.note_entry.get(),
         )
-        self.on_save()
-        self.destroy()
+
+        self.on_save()   # tell the parent page to refresh its table
+        self.destroy()   # close this dialog
 
 
 # ── Edit Transaction Dialog ───────────────────────────────────────────────────
 
 class EditTransactionDialog(ctk.CTkToplevel):
+    """
+    Modal dialog for editing an existing transaction.
+    Identical layout to AddTransactionDialog but all fields are pre-filled
+    with the transaction's current values.
+    Calls update_transaction() instead of add_transaction() on save.
+    Calls on_save() after successfully saving to refresh the parent table.
+    """
 
     def __init__(self, parent, user, tx, on_save):
         super().__init__(parent)
         self.user    = user
-        self.tx      = tx
-        self.on_save = on_save
+        self.tx      = tx       # the existing Transaction object being edited
+        self.on_save = on_save  # callback — called after successful save
 
         self.title("Edit Transaction")
         self.geometry("420x520")
         self.resizable(False, False)
-        self.grab_set()
+        self.grab_set()  # modal — blocks interaction with the main window
         self.grid_columnconfigure(0, weight=1)
         self._build()
 
     def _build(self):
+        """Builds all form fields pre-filled with the transaction's current data."""
         pad = {"padx": 28, "sticky": "ew"}
 
-        # Type toggle — pre-filled with current type
-        self.type_var = ctk.StringVar(value=self.tx.type)
+        # ── Type toggle — pre-selected to current type ────────────────────────
+        self.type_var = ctk.StringVar(value=self.tx.type)  # "income" or "expense"
         toggle = ctk.CTkFrame(self, fg_color="#F1F5F9", corner_radius=8)
         toggle.grid(row=0, column=0, padx=28, pady=(28, 0), sticky="ew")
         toggle.grid_columnconfigure((0, 1), weight=1)
+
         for col, (label, val) in enumerate([("Expense", "expense"), ("Income", "income")]):
             ctk.CTkRadioButton(
                 toggle, text=label, variable=self.type_var, value=val,
                 font=ctk.CTkFont(size=14, weight="bold"),
             ).grid(row=0, column=col, padx=16, pady=12)
 
-        # Amount — pre-filled
+        # ── Amount — pre-filled with current amount ───────────────────────────
         ctk.CTkLabel(self, text="Amount", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=1, column=0, padx=28, pady=(20, 4), sticky="w")
         self.amount_entry = ctk.CTkEntry(
             self, font=ctk.CTkFont(size=22, weight="bold"),
             height=52, corner_radius=8,
         )
+        # Convert cents back to decimal for display: 150050 → "1500.5"
         self.amount_entry.insert(0, str(self.tx.amount_cents / 100))
         self.amount_entry.grid(row=2, column=0, **pad)
         self.amount_entry.focus()
 
-        # Category — pre-filled
+        # ── Category — pre-selected to current category ───────────────────────
         ctk.CTkLabel(self, text="Category", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=3, column=0, padx=28, pady=(16, 4), sticky="w")
         categories = list(Category.select().where(
@@ -504,8 +651,8 @@ class EditTransactionDialog(ctk.CTkToplevel):
         ).order_by(Category.name))
         self.cat_map = {f"{c.icon} {c.name}": c for c in categories}
 
-        # Find current category in options
-        current_cat_key = list(self.cat_map.keys())[0]
+        # Find the display key that matches the transaction's current category
+        current_cat_key = list(self.cat_map.keys())[0]  # fallback to first
         if self.tx.category:
             for key, cat in self.cat_map.items():
                 if cat.id == self.tx.category_id:
@@ -519,7 +666,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         ).grid(row=4, column=0, **pad)
 
-        # Date — pre-filled
+        # ── Date — pre-filled with current date ──────────────────────────────
         ctk.CTkLabel(self, text="Date", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=5, column=0, padx=28, pady=(16, 4), sticky="w")
         self.date_entry = ctk.CTkEntry(
@@ -528,7 +675,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
         self.date_entry.insert(0, self.tx.date.strftime("%d.%m.%Y"))
         self.date_entry.grid(row=6, column=0, **pad)
 
-        # Note — pre-filled
+        # ── Note — pre-filled with current note ──────────────────────────────
         ctk.CTkLabel(self, text="Note (optional)", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=7, column=0, padx=28, pady=(16, 4), sticky="w")
         self.note_entry = ctk.CTkEntry(
@@ -537,6 +684,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
         self.note_entry.insert(0, self.tx.note)
         self.note_entry.grid(row=8, column=0, **pad)
 
+        # ── Save button ───────────────────────────────────────────────────────
         ctk.CTkButton(
             self, text="Save Changes",
             height=48, corner_radius=8,
@@ -546,18 +694,29 @@ class EditTransactionDialog(ctk.CTkToplevel):
         ).grid(row=9, column=0, padx=28, pady=28, sticky="ew")
 
     def _save(self):
+        """
+        Validates all inputs, updates the existing transaction, then closes.
+        Uses update_transaction() which only changes fields that are passed in.
+        Shows an error popup if amount or date is invalid.
+        """
+        # Validate amount
         try:
             amount_cents = parse_money(self.amount_entry.get())
         except ValueError:
             messagebox.showerror("Error", "Invalid amount. Enter a number like 150.50")
             return
+
+        # Validate date
         try:
             tx_date = parse_date(self.date_entry.get())
         except ValueError:
             messagebox.showerror("Error", "Invalid date. Use DD.MM.YYYY format")
             return
 
+        # Look up the Category object from the display string
         category = self.cat_map.get(self.cat_var.get())
+
+        # update_transaction patches only the fields we pass in
         update_transaction(
             self.tx,
             amount_cents=amount_cents,
@@ -566,5 +725,6 @@ class EditTransactionDialog(ctk.CTkToplevel):
             note=self.note_entry.get(),
             type=self.type_var.get(),
         )
-        self.on_save()
-        self.destroy()
+
+        self.on_save()   # tell the parent page to refresh its table
+        self.destroy()   # close this dialog
