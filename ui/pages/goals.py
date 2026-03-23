@@ -1,54 +1,27 @@
 """
 ui/pages/goals.py
 Goals page — savings goals with progress bars.
+Now uses goal_service instead of direct DB access.
 """
 
+import logging
 import customtkinter as ctk
 from tkinter import messagebox
-from models.models import Goal
+from services.goal_service import (
+    get_goals, add_goal, contribute_to_goal,
+    archive_goal, get_goal_progress
+)
 from utils.formatters import format_money_short, set_currency
-from db.database import db
 
-
-# ── Standalone helper functions ───────────────────────────────────────────────
-# Kept here instead of a separate service because goals logic is simple
-# and doesn't need to be shared with other pages yet.
-
-def get_goals(user):
-    """Returns all active goals for a user, newest first."""
-    return list(Goal.select().where(
-        Goal.user == user,
-        Goal.status == "active",
-    ).order_by(Goal.created_at.desc()))
-
-
-def add_goal(user, name, target_cents, icon="🎯"):
-    """Creates and saves a new goal."""
-    with db:
-        return Goal.create(
-            user=user, name=name,
-            target_cents=target_cents,
-            icon=icon,
-        )
-
-
-def contribute_to_goal(goal, amount_cents):
-    """Adds amount to goal. Marks completed if target is reached."""
-    from db.database import db
-    with db:
-        goal.current_cents += amount_cents
-        if goal.current_cents >= goal.target_cents:
-            goal.status = "completed"
-        goal.save()
-
-def archive_goal(goal):
-    """Soft-deletes a goal by setting its status to 'archived'."""
-    with db:
-        goal.status = "archived"
-        goal.save()
+logger = logging.getLogger(__name__)
 
 
 class GoalsPage(ctk.CTkFrame):
+    """
+    Savings goals page.
+    Shows active goals as cards in a two-column grid.
+    Each card has a progress bar, contribute button and archive button.
+    """
 
     def __init__(self, parent, user, app):
         super().__init__(parent, fg_color="#F8FAFC", corner_radius=0)
@@ -63,7 +36,6 @@ class GoalsPage(ctk.CTkFrame):
         self._build_body()
 
     def _build_header(self):
-        # White top bar with page title and New Goal button
         header = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=0, height=72)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_columnconfigure(0, weight=1)
@@ -84,7 +56,6 @@ class GoalsPage(ctk.CTkFrame):
         ).grid(row=0, column=1, padx=32, pady=16, sticky="e")
 
     def _build_body(self):
-        # Two-column grid of goal cards
         self.body = ctk.CTkScrollableFrame(
             self, fg_color="#F8FAFC", corner_radius=0
         )
@@ -93,7 +64,7 @@ class GoalsPage(ctk.CTkFrame):
         self._load_goals()
 
     def _load_goals(self):
-        # Clear and re-render all goal cards
+        """Clears and re-renders all active goal cards."""
         for w in self.body.winfo_children():
             w.destroy()
 
@@ -103,75 +74,80 @@ class GoalsPage(ctk.CTkFrame):
             ctk.CTkLabel(
                 self.body,
                 text="No goals yet.\nClick '+ New Goal' to create one.",
-                font=ctk.CTkFont(size=14), text_color="#94A3B8", justify="center",
+                font=ctk.CTkFont(size=14),
+                text_color="#94A3B8",
+                justify="center",
             ).grid(row=0, column=0, columnspan=2, pady=60)
             return
 
-        # Layout goals in two columns: 0,1,2,3... → (row 0 col 0), (row 0 col 1), ...
         for i, goal in enumerate(goals):
             col = i % 2
             row = i // 2
             self._goal_card(row, col, goal)
 
     def _goal_card(self, row, col, goal):
-        # How full the progress bar is — capped at 100%
-        pct  = min(goal.current_cents / goal.target_cents, 1.0) if goal.target_cents > 0 else 0
-        done = pct >= 1.0
+        """Renders a single goal card with progress bar and action buttons."""
+        progress = get_goal_progress(goal)
+        pct      = progress["percent"] / 100
+        done     = progress["is_completed"]
 
-        # White card — left column has no left margin, right column has 12px
         card = ctk.CTkFrame(self.body, fg_color="#FFFFFF", corner_radius=12)
-        card.grid(row=row, column=col, padx=(0 if col == 0 else 12, 0),
+        card.grid(row=row, column=col,
+                  padx=(0 if col == 0 else 12, 0),
                   pady=(0, 16), sticky="ew")
         card.grid_columnconfigure(0, weight=1)
 
-        # Top row: goal icon + name on left, archive button on right
+        # Icon + name + archive button
         top = ctk.CTkFrame(card, fg_color="transparent")
         top.grid(row=0, column=0, padx=20, pady=(20, 8), sticky="ew")
         top.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
             top, text=f"{goal.icon}  {goal.name}",
-            font=ctk.CTkFont(size=16, weight="bold"), text_color="#1E293B",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#1E293B",
         ).grid(row=0, column=0, sticky="w")
 
-        # Small X button to archive the goal
         ctk.CTkButton(
             top, text="✕", width=28, height=28, corner_radius=6,
-            fg_color="transparent", hover_color="#FEE2E2", text_color="#94A3B8",
+            fg_color="transparent", hover_color="#FEE2E2",
+            text_color="#94A3B8",
             command=lambda g=goal: self._archive(g),
         ).grid(row=0, column=1)
 
-        # Progress bar background — grey track
+        # Progress bar
         bar_bg = ctk.CTkFrame(card, fg_color="#F1F5F9", corner_radius=4, height=10)
         bar_bg.grid(row=1, column=0, padx=20, pady=(0, 8), sticky="ew")
         bar_bg.grid_propagate(False)
 
         if pct > 0:
-            # Green when completed, blue while in progress
             bar_color = "#16A34A" if done else "#2563EB"
-            bar_fill  = ctk.CTkFrame(bar_bg, fg_color=bar_color, corner_radius=4, height=10)
-            bar_fill.place(relx=0, rely=0, relwidth=pct, relheight=1)
+            ctk.CTkFrame(
+                bar_bg, fg_color=bar_color, corner_radius=4, height=10
+            ).place(relx=0, rely=0, relwidth=min(pct, 1.0), relheight=1)
 
-        # e.g. "420 $ / 1 000 $  ·  42.0%"
+        # Amount + percent
         ctk.CTkLabel(
             card,
             text=f"{format_money_short(goal.current_cents)} / "
-                 f"{format_money_short(goal.target_cents)}  ·  {round(pct*100, 1)}%",
-            font=ctk.CTkFont(size=13), text_color="#64748B",
+                 f"{format_money_short(goal.target_cents)}  ·  {progress['percent']}%",
+            font=ctk.CTkFont(size=13),
+            text_color="#64748B",
         ).grid(row=2, column=0, padx=20, pady=(0, 12), sticky="w")
 
+        # Bottom action
         if done:
-            # Replace contribute button with a success label when goal is reached
             ctk.CTkLabel(
                 card, text="✅ Goal reached!",
-                font=ctk.CTkFont(size=13, weight="bold"), text_color="#16A34A",
+                font=ctk.CTkFont(size=13, weight="bold"),
+                text_color="#16A34A",
             ).grid(row=3, column=0, padx=20, pady=(0, 20), sticky="w")
         else:
-            # Contribute button opens a small dialog to add money to the goal
             ctk.CTkButton(
                 card, text="+ Contribute",
                 height=34, corner_radius=8,
-                fg_color="#EFF6FF", hover_color="#DBEAFE", text_color="#2563EB",
+                fg_color="#EFF6FF", hover_color="#DBEAFE",
+                text_color="#2563EB",
                 font=ctk.CTkFont(size=13, weight="bold"),
                 command=lambda g=goal: self._contribute(g),
             ).grid(row=3, column=0, padx=20, pady=(0, 20), sticky="ew")
@@ -186,10 +162,12 @@ class GoalsPage(ctk.CTkFrame):
         ok = messagebox.askyesno("Archive goal", f"Archive '{goal.name}'?")
         if ok:
             archive_goal(goal)
+            logger.info(f"User archived goal: {goal.name}")
             self._load_goals()
 
 
 class AddGoalDialog(ctk.CTkToplevel):
+    """Dialog for creating a new savings goal."""
 
     def __init__(self, parent, user, on_save):
         super().__init__(parent)
@@ -208,7 +186,6 @@ class AddGoalDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(self, text="Goal name", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=0, column=0, padx=28, pady=(28, 4), sticky="w")
-
         self.name_entry = ctk.CTkEntry(
             self, placeholder_text="e.g. Japan trip",
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
@@ -218,7 +195,6 @@ class AddGoalDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(self, text="Target amount", font=ctk.CTkFont(size=13),
                      text_color="#64748B").grid(row=2, column=0, padx=28, pady=(16, 4), sticky="w")
-
         self.amount_entry = ctk.CTkEntry(
             self, placeholder_text="1000.00",
             font=ctk.CTkFont(size=22, weight="bold"),
@@ -246,12 +222,18 @@ class AddGoalDialog(ctk.CTkToplevel):
             messagebox.showerror("Error", "Invalid amount")
             return
 
-        add_goal(self.user, name, target_cents)
-        self.on_save()   # refresh the goals grid
+        try:
+            add_goal(self.user, name, target_cents)
+        except ValueError as e:
+            messagebox.showerror("Error", str(e))
+            return
+
+        self.on_save()
         self.destroy()
 
 
 class ContributeDialog(ctk.CTkToplevel):
+    """Dialog for adding money to an existing goal."""
 
     def __init__(self, parent, goal, on_save):
         super().__init__(parent)
@@ -266,19 +248,19 @@ class ContributeDialog(ctk.CTkToplevel):
         self._build()
 
     def _build(self):
-        # Show goal name and current progress at the top of the dialog
         ctk.CTkLabel(
             self,
             text=f"{self.goal.icon} {self.goal.name}",
-            font=ctk.CTkFont(size=16, weight="bold"), text_color="#1E293B",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#1E293B",
         ).grid(row=0, column=0, padx=28, pady=(28, 4), sticky="w")
 
-        # e.g. "420 $ / 1 000 $"
         ctk.CTkLabel(
             self,
             text=f"{format_money_short(self.goal.current_cents)} / "
                  f"{format_money_short(self.goal.target_cents)}",
-            font=ctk.CTkFont(size=13), text_color="#64748B",
+            font=ctk.CTkFont(size=13),
+            text_color="#64748B",
         ).grid(row=1, column=0, padx=28, pady=(0, 16), sticky="w")
 
         self.amount_entry = ctk.CTkEntry(
@@ -304,6 +286,12 @@ class ContributeDialog(ctk.CTkToplevel):
         except ValueError:
             messagebox.showerror("Error", "Invalid amount")
             return
-        contribute_to_goal(self.goal, amount_cents)
-        self.on_save()   # refresh the goals grid
+
+        try:
+            contribute_to_goal(self.goal, amount_cents)
+        except ValueError as e:
+            messagebox.showerror("Error", str(e))
+            return
+
+        self.on_save()
         self.destroy()

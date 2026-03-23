@@ -18,6 +18,9 @@ import time
 from datetime import date
 from plyer import notification
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 # How often to check budget limits (in seconds)
 # 3600 = 1 hour. Set to 60 for testing.
@@ -59,7 +62,7 @@ def start_notification_worker(user) -> None:
         name="BudgetNotificationWorker",
     )
     thread.start()
-    print("🔔 Notification worker started")
+    logger.info("Notification worker started")
 
 
 def stop_notification_worker() -> None:
@@ -82,7 +85,7 @@ def _worker(user) -> None:
             _check_and_notify(user)
         except Exception as e:
             # Never crash the background thread — just log and continue
-            print(f"⚠️ Notification worker error: {e}")
+            logger.error(f"Notification worker error: {e}")
 
         # Sleep in small increments so we can respond to _running=False quickly
         # instead of sleeping the full hour at once
@@ -172,10 +175,10 @@ def _send_notification(cat_name: str, status: str, pct: float, row: dict) -> Non
             app_name="BudgetWise",
             timeout=8,   # notification disappears after 8 seconds
         )
-        print(f"🔔 Notification sent: {title}")
+        logger.info(f"Notification sent: {title}")
     except Exception as e:
         # plyer may fail silently on some macOS configurations — just log it
-        print(f"⚠️ Could not send notification: {e}")
+        logger.warning(f"Could not send notification: {e}")
 
 
 def check_now(user) -> int:

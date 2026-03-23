@@ -4,7 +4,7 @@ Application-wide constants — colors, sizes, UI settings.
 """
 
 APP_NAME    = "BudgetWise"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 # ── Window size ───────────────────────────────────────────────────────────────
 WINDOW_WIDTH  = 1100

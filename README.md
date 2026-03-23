@@ -358,6 +358,13 @@ python -m PyInstaller --noconfirm BudgetWise.spec
 
 ## Changelog
 
+
+### v1.2.0 (March 2026)
+- ✅ Background budget notifications — daemon thread checks limits every hour
+- ✅ Test Notifications button in Settings
+- ✅ GitHub Actions CI — auto-run 124 tests on every push
+- ✅ Screenshots added to README
+
 ### v1.1.0 (March 2026)
 - ✅ Edit transactions — pre-filled dialog with current values
 - ✅ Filters in Transactions page — by type, category, date range

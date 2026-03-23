@@ -9,6 +9,8 @@ import os
 from datetime import datetime
 from db.database import db
 from models.models import ALL_MODELS, Category
+import logging
+logger = logging.getLogger(__name__)
 
 
 # ── System categories (user=NULL, shared across all users) ───────────────────
@@ -46,14 +48,14 @@ def backup_db():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = os.path.join(backup_dir, f"budget_backup_{timestamp}.db")
         shutil.copy2(DB_PATH, backup_path)
-        print(f"💾 Backup saved: {backup_path}")
+        logger.info("💾 Backup saved: {backup_path}")
 
 
 def create_tables():
     """Creates all tables (skips existing ones)."""
     with db:
         db.create_tables(ALL_MODELS, safe=True)
-    print("✅ Tables created")
+    logger.info("✅ Tables created")
 
 
 def seed_categories():
@@ -62,9 +64,9 @@ def seed_categories():
         existing = Category.select().where(Category.user.is_null()).count()
         if existing == 0:
             Category.insert_many(SYSTEM_CATEGORIES).execute()
-            print(f"✅ Added {len(SYSTEM_CATEGORIES)} system categories")
+            logger.info(f"✅ Added {len(SYSTEM_CATEGORIES)} system categories")
         else:
-            print(f"ℹ️  System categories already exist ({existing} found), skipping")
+            logger.info(f"ℹ️  System categories already exist ({existing} found), skipping")
 
 
 def run():
