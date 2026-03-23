@@ -201,47 +201,47 @@ class DashboardPage(ctk.CTkFrame):
             self._transaction_row(container, i, tx, is_last=(i == len(txs) - 1))
 
     def _transaction_row(self, parent, row_idx, tx, is_last: bool):
-        row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.grid(row=row_idx, column=0, padx=20, pady=0, sticky="ew")
-        row.grid_columnconfigure(1, weight=1)
+        # Divider occupies even rows, content occupies odd rows
+        grid_row = row_idx * 2  # 0, 2, 4, 6...
 
-        # Thin grey divider line between rows (skip the first row)
+        # Thin grey divider — skip for first row
         if row_idx > 0:
             divider = ctk.CTkFrame(parent, fg_color="#F1F5F9", height=1)
-            divider.grid(row=row_idx, column=0, padx=20, sticky="ew")
-            row.grid(row=row_idx, column=0, padx=20, pady=0, sticky="ew")
+            divider.grid(row=grid_row - 1, column=0, padx=20, sticky="ew")
 
-        # Category emoji icon — falls back to 💳 if no category set
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.grid(row=grid_row, column=0, padx=20, pady=0, sticky="ew")
+        row.grid_columnconfigure(1, weight=1)
+
+        # Category emoji icon
         icon = tx.category.icon if tx.category else "💳"
         ctk.CTkLabel(
-            row,
-            text=icon,
+            row, text=icon,
             font=ctk.CTkFont(size=22),
             width=40,
+            fg_color="transparent",
         ).grid(row=0, column=0, padx=(0, 12), pady=14)
 
-        # Category name + optional note in one label
+        # Category name + note
         name = tx.category.name if tx.category else "Uncategorized"
         note = f"  {tx.note}" if tx.note else ""
         ctk.CTkLabel(
-            row,
-            text=f"{name}{note}",
+            row, text=f"{name}{note}",
             font=ctk.CTkFont(size=14),
             text_color="#1E293B",
             anchor="w",
         ).grid(row=0, column=1, sticky="w")
 
-        # Short date e.g. "19 Mar"
+        # Short date
         ctk.CTkLabel(
-            row,
-            text=format_date_short(tx.date),
+            row, text=format_date_short(tx.date),
             font=ctk.CTkFont(size=12),
             text_color="#94A3B8",
         ).grid(row=0, column=2, padx=16)
 
-        # Amount: green + prefix for income, red - prefix for expense
+        # Amount
         color = "#16A34A" if tx.type == "income" else "#DC2626"
-        sign  = "+" if tx.type == "income" else "-"
+        sign = "+" if tx.type == "income" else "\u2212"
         ctk.CTkLabel(
             row,
             text=f"{sign}{format_money_short(tx.amount_cents)}",

@@ -50,8 +50,11 @@
 ### Budget
 ![Budget](screenshots/Budget_screenshot.png)
 
-### Analytics
-![Analytics](screenshots/Analytics_screenshot.png)
+### Analytics1
+![Analytics](screenshots/Analytics_screenshot1.png)
+
+### Analytics2
+![Analytics](screenshots/Analytics_screenshot2.png)
 
 ### Goals
 ![Goals](screenshots/Goals_screenshot.png)
