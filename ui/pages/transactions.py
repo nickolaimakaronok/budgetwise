@@ -348,6 +348,11 @@ class TransactionsPage(ctk.CTkFrame):
 
         # Col 3 — Note truncated at 28 characters to avoid overflow
         note_text = tx.note[:28] + "…" if len(tx.note) > 28 else tx.note
+
+        # Recurring indicator
+        if tx.is_recurring:
+            note_text = f"🔄 {note_text}"
+
         ctk.CTkLabel(f, text=note_text,
                      font=ctk.CTkFont(size=13), text_color="#94A3B8", width=180, anchor="w"
                      ).grid(row=0, column=3, padx=8, sticky="w")
@@ -475,7 +480,7 @@ class AddTransactionDialog(ctk.CTkToplevel):
         self.on_save = on_save  # callback — called after successful save
 
         self.title("Add Transaction")
-        self.geometry("420x520")
+        self.geometry("420x600")
         self.resizable(False, False)
         self.grab_set()  # modal — blocks interaction with the main window
         self.grid_columnconfigure(0, weight=1)
@@ -545,6 +550,18 @@ class AddTransactionDialog(ctk.CTkToplevel):
         )
         self.note_entry.grid(row=8, column=0, **pad)
 
+        # ── Repeat monthly checkbox ───────────────────────────────────────────
+        self.recurring_var = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            self,
+            text="🔄 Repeat monthly — auto-create every month",
+            variable=self.recurring_var,
+            font=ctk.CTkFont(size=13),
+            text_color="#1E293B",
+            checkbox_width=20,
+            checkbox_height=20,
+        ).grid(row=9, column=0, padx=28, pady=(16, 0), sticky="w")
+
         # ── Save button ───────────────────────────────────────────────────────
         ctk.CTkButton(
             self, text="Save Transaction",
@@ -552,7 +569,7 @@ class AddTransactionDialog(ctk.CTkToplevel):
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=15, weight="bold"),
             command=self._save,
-        ).grid(row=9, column=0, padx=28, pady=28, sticky="ew")
+        ).grid(row=10, column=0, padx=28, pady=28, sticky="ew")
 
     def _save(self):
         """
@@ -683,6 +700,8 @@ class EditTransactionDialog(ctk.CTkToplevel):
         )
         self.note_entry.insert(0, self.tx.note)
         self.note_entry.grid(row=8, column=0, **pad)
+
+
 
         # ── Save button ───────────────────────────────────────────────────────
         ctk.CTkButton(

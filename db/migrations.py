@@ -48,7 +48,7 @@ def backup_db():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = os.path.join(backup_dir, f"budget_backup_{timestamp}.db")
         shutil.copy2(DB_PATH, backup_path)
-        logger.info("💾 Backup saved: {backup_path}")
+        logger.info(f"💾 Backup saved: {backup_path}")
 
 
 def create_tables():
@@ -69,11 +69,29 @@ def seed_categories():
             logger.info(f"ℹ️  System categories already exist ({existing} found), skipping")
 
 
+def _apply_migrations():
+    """
+    Safely adds new columns to existing tables.
+    Each migration is wrapped in try/except — safe to run multiple times.
+    If column already exists — OperationalError is raised and caught silently.
+    """
+
+    # v1.4.0 — add is_recurring to transaction table
+    try:
+        db.execute_sql(
+            'ALTER TABLE transactions ADD COLUMN is_recurring INTEGER DEFAULT 0'
+        )
+        logger.info("Migration: added is_recurring column")
+    except Exception:
+        pass
+
+
 def run():
     backup_db()
     create_tables()
+    _apply_migrations()
     seed_categories()
-    print("🚀 Database is ready")
+    logger.info("🚀 Database is ready")
 
 
 if __name__ == "__main__":

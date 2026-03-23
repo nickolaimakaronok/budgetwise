@@ -6,6 +6,9 @@ Run with: python main.py
 import sys
 import os
 
+import calendar
+from datetime import date
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Setup logging first — before anything else
@@ -38,11 +41,21 @@ def main():
         user = User.create(name="Me", currency="USD")
         logger.info("Created default user")
 
-    # 3. Start background notification worker
+    # 3. Auto-create recurring transactions for current month
+    from services.transaction_service import create_recurring_for_month
+    today = date.today()
+    created = create_recurring_for_month(user, today.year, today.month)
+    if created > 0:
+        logger.info(
+            f"Auto-created {created} recurring transactions "
+            f"for {today.month}/{today.year}"
+        )
+
+    # 4. Start background notification worker
     from utils.notifications import start_notification_worker
     start_notification_worker(user)
 
-    # 4. Launch UI
+    # 5. Launch UI
     logger.info("Launching UI")
     ctk.set_appearance_mode("Light")
     ctk.set_default_color_theme("blue")

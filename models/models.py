@@ -57,6 +57,7 @@ class Transaction(BaseModel):
     date         = DateField(default=date.today)
     note         = TextField(default="")
     created_at   = DateTimeField(default=datetime.now)
+    is_recurring = BooleanField(default=False)
 
     class Meta:
         table_name = "transactions"
