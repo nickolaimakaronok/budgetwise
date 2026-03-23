@@ -13,17 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 def get_goals(user) -> list[Goal]:
-    """
-    Returns all active goals for a user, newest first.
-
-    Usage:
-        goals = get_goals(user)
-    """
     goals = list(Goal.select().where(
         Goal.user == user,
-        Goal.status == "active",
+        Goal.status.in_(["active", "completed"]),
     ).order_by(Goal.created_at.desc()))
-    logger.debug(f"Fetched {len(goals)} active goals for user {user.id}")
     return goals
 
 
