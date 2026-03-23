@@ -9,7 +9,7 @@
 > A personal finance desktop app for macOS built entirely in Python.
 > Track income and expenses, set budget limits, manage savings goals, and visualize spending analytics.
 
-**Version:** 1.1.0
+**Version:** 1.3.0
 **Platform:** macOS (Apple Silicon + Intel)
 **Language:** Python 3.12
 **UI:** CustomTkinter + Matplotlib
