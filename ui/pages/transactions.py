@@ -602,6 +602,7 @@ class AddTransactionDialog(ctk.CTkToplevel):
             category=category,
             tx_date=tx_date,
             note=self.note_entry.get(),
+            is_recurring=self.recurring_var.get(),
         )
 
         self.on_save()   # tell the parent page to refresh its table

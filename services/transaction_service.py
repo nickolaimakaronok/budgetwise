@@ -21,6 +21,7 @@ def add_transaction(
     category: Optional[Category] = None,
     tx_date: Optional[date_type] = None,
     note: str = "",
+    is_recurring: bool = False
 ) -> Transaction:
     """
     Creates and saves a new transaction.
@@ -233,7 +234,7 @@ def create_recurring_for_month(user, year: int, month: int) -> int:
                     category     = tx.category,
                     date         = target_date,
                     note         = tx.note,
-                    is_recurring = False,  # copy is not recurring itself
+                    is_recurring = True,  # copy is not recurring itself
                 )
             created += 1
             logger.info(
