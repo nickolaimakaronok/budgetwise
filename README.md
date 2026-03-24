@@ -9,7 +9,7 @@
 > A personal finance desktop app for macOS built entirely in Python.
 > Track income and expenses, set budget limits, manage savings goals, and visualize spending analytics.
 
-**Version:** 1.3.0
+**Version:** 1.4.0
 **Platform:** macOS (Apple Silicon + Intel)
 **Language:** Python 3.12
 **UI:** CustomTkinter + Matplotlib
@@ -52,6 +52,9 @@
 
 ### Transactions
 ![Transactions](screenshots/Transactions_screenshot.png)
+
+### Repeat_Transactions
+![Transactions](screenshots/Repeat_transactions_screenshot.png)
 
 ### Budget
 ![Budget](screenshots/Budget_screenshot.png)
@@ -367,6 +370,20 @@ python -m PyInstaller --noconfirm BudgetWise.spec
 
 ## Changelog
 
+### v1.4.0 (March 2026)
+- ✅ Recurring transactions — auto-create monthly with smart date handling
+- ✅ Repeat monthly checkbox in Add Transaction dialog
+- ✅ Smart date calculation for Feb 28/29, months with 30/31 days
+- ✅ Database migrations for existing users
+
+### v1.3.0 (March 2026)
+- ✅ Goal service — logic moved to services/goal_service.py
+- ✅ Proper logging — events saved to ~/Documents/BudgetWise/budgetwise.log
+- ✅ Validation in goal_service — empty name and zero amount now raise errors
+- ✅ Architecture improved — all 5 modules now follow services pattern
+- ✅ GitHub Actions CI — auto-run 124 tests on every push
+- ✅ Screenshots added to README
+- ✅ Demo video link added to README
 
 ### v1.2.0 (March 2026)
 - ✅ Background budget notifications — daemon thread checks limits every hour
