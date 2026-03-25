@@ -992,3 +992,177 @@ class TestEdgeCases:
         assert row["left_cents"]  == 100000
         assert row["percent"]     == 0.0
         assert row["status"]      == "ok"
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GOAL SERVICE TESTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestGoalService:
+
+    def test_add_goal_basic(self, user):
+        from services.goal_service import add_goal, get_goals
+        goal = add_goal(user, "Japan Trip", 200000)
+        assert goal.id is not None
+        assert goal.name == "Japan Trip"
+        assert goal.target_cents == 200000
+        assert goal.current_cents == 0
+        assert goal.status == "active"
+        assert goal.icon == "🎯"
+
+    def test_add_goal_empty_name_raises(self, user):
+        from services.goal_service import add_goal
+        with pytest.raises(ValueError, match="empty"):
+            add_goal(user, "", 200000)
+
+    def test_add_goal_zero_amount_raises(self, user):
+        from services.goal_service import add_goal
+        with pytest.raises(ValueError, match="greater than zero"):
+            add_goal(user, "Test", 0)
+
+    def test_add_goal_negative_amount_raises(self, user):
+        from services.goal_service import add_goal
+        with pytest.raises(ValueError):
+            add_goal(user, "Test", -100)
+
+    def test_add_goal_with_deadline(self, user):
+        from services.goal_service import add_goal
+        from datetime import date
+        deadline = date(2026, 6, 1)
+        goal = add_goal(user, "Vacation", 100000, deadline=deadline)
+        assert goal.deadline == deadline
+
+    def test_add_goal_custom_icon(self, user):
+        from services.goal_service import add_goal
+        goal = add_goal(user, "Car", 500000, icon="🚗")
+        assert goal.icon == "🚗"
+
+    def test_get_goals_returns_active(self, user):
+        from services.goal_service import add_goal, get_goals
+        add_goal(user, "Goal 1", 100000)
+        add_goal(user, "Goal 2", 200000)
+        goals = get_goals(user)
+        assert len(goals) == 2
+
+    def test_get_goals_newest_first(self, user):
+        from services.goal_service import add_goal, get_goals
+        add_goal(user, "First", 100000)
+        add_goal(user, "Second", 200000)
+        goals = get_goals(user)
+        assert goals[0].name == "Second"
+
+    def test_get_goals_excludes_archived(self, user):
+        from services.goal_service import add_goal, get_goals, archive_goal
+        g = add_goal(user, "Goal", 100000)
+        archive_goal(g)
+        goals = get_goals(user)
+        assert len(goals) == 0
+
+    def test_get_goals_includes_completed(self, user):
+        from services.goal_service import add_goal, get_goals, contribute_to_goal
+        g = add_goal(user, "Goal", 10000)
+        contribute_to_goal(g, 10000)
+        goals = get_goals(user)
+        assert len(goals) == 1
+        assert goals[0].status == "completed"
+
+    def test_contribute_basic(self, user):
+        from services.goal_service import add_goal, contribute_to_goal
+        goal = add_goal(user, "Test", 10000)
+        contribute_to_goal(goal, 3000)
+        assert goal.current_cents == 3000
+        assert goal.status == "active"
+
+    def test_contribute_marks_completed(self, user):
+        from services.goal_service import add_goal, contribute_to_goal
+        goal = add_goal(user, "Test", 10000)
+        contribute_to_goal(goal, 10000)
+        assert goal.status == "completed"
+
+    def test_contribute_over_target_marks_completed(self, user):
+        from services.goal_service import add_goal, contribute_to_goal
+        goal = add_goal(user, "Test", 10000)
+        contribute_to_goal(goal, 15000)
+        assert goal.status == "completed"
+        assert goal.current_cents == 15000
+
+    def test_contribute_zero_raises(self, user):
+        from services.goal_service import add_goal, contribute_to_goal
+        goal = add_goal(user, "Test", 10000)
+        with pytest.raises(ValueError):
+            contribute_to_goal(goal, 0)
+
+    def test_contribute_negative_raises(self, user):
+        from services.goal_service import add_goal, contribute_to_goal
+        goal = add_goal(user, "Test", 10000)
+        with pytest.raises(ValueError):
+            contribute_to_goal(goal, -100)
+
+    def test_archive_goal(self, user):
+        from services.goal_service import add_goal, archive_goal
+        goal = add_goal(user, "Test", 10000)
+        archive_goal(goal)
+        assert goal.status == "archived"
+
+    def test_get_goal_progress_empty(self, user):
+        from services.goal_service import add_goal, get_goal_progress
+        goal = add_goal(user, "Test", 10000)
+        progress = get_goal_progress(goal)
+        assert progress["percent"] == 0.0
+        assert progress["remaining_cents"] == 10000
+        assert progress["is_completed"] == False
+
+    def test_get_goal_progress_half(self, user):
+        from services.goal_service import add_goal, contribute_to_goal, get_goal_progress
+        goal = add_goal(user, "Test", 10000)
+        contribute_to_goal(goal, 5000)
+        progress = get_goal_progress(goal)
+        assert progress["percent"] == 50.0
+        assert progress["remaining_cents"] == 5000
+        assert progress["is_completed"] == False
+
+    def test_get_goal_progress_completed(self, user):
+        from services.goal_service import add_goal, contribute_to_goal, get_goal_progress
+        goal = add_goal(user, "Test", 10000)
+        contribute_to_goal(goal, 10000)
+        progress = get_goal_progress(goal)
+        assert progress["percent"] == 100.0
+        assert progress["remaining_cents"] == 0
+        assert progress["is_completed"] == True
+
+    def test_get_goal_deadline_info_no_deadline(self, user):
+        from services.goal_service import add_goal, get_goal_deadline_info
+        goal = add_goal(user, "Test", 10000)
+        info = get_goal_deadline_info(goal)
+        assert info["has_deadline"] == False
+        assert info["days_left"] is None
+        assert info["needed_per_month"] is None
+
+    def test_get_goal_deadline_info_future(self, user):
+        from services.goal_service import add_goal, get_goal_deadline_info
+        from datetime import date, timedelta
+        future = date.today() + timedelta(days=60)
+        goal = add_goal(user, "Test", 120000, deadline=future)
+        info = get_goal_deadline_info(goal)
+        assert info["has_deadline"] == True
+        assert info["days_left"] > 0
+        assert info["is_overdue"] == False
+        assert info["needed_per_month"] > 0
+
+    def test_get_goal_deadline_info_overdue(self, user):
+        from services.goal_service import add_goal, get_goal_deadline_info
+        from datetime import date, timedelta
+        past = date.today() - timedelta(days=10)
+        goal = add_goal(user, "Test", 10000, deadline=past)
+        info = get_goal_deadline_info(goal)
+        assert info["has_deadline"] == True
+        assert info["is_overdue"] == True
+        assert info["days_left"] < 0
+
+    def test_goal_isolation_between_users(self, user, user2):
+        from services.goal_service import add_goal, get_goals
+        add_goal(user, "User1 Goal", 10000)
+        goals_user2 = get_goals(user2)
+        assert len(goals_user2) == 0

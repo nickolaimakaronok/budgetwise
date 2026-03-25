@@ -86,10 +86,13 @@ class GoalsPage(ctk.CTkFrame):
             self._goal_card(row, col, goal)
 
     def _goal_card(self, row, col, goal):
-        """Renders a single goal card with progress bar and action buttons."""
         progress = get_goal_progress(goal)
-        pct      = progress["percent"] / 100
-        done     = progress["is_completed"]
+        pct = progress["percent"] / 100
+        done = progress["is_completed"]
+
+        # Get deadline info
+        from services.goal_service import get_goal_deadline_info
+        deadline_info = get_goal_deadline_info(goal)
 
         card = ctk.CTkFrame(self.body, fg_color="#FFFFFF", corner_radius=12)
         card.grid(row=row, column=col,
@@ -133,15 +136,38 @@ class GoalsPage(ctk.CTkFrame):
                  f"{format_money_short(goal.target_cents)}  ·  {progress['percent']}%",
             font=ctk.CTkFont(size=13),
             text_color="#64748B",
-        ).grid(row=2, column=0, padx=20, pady=(0, 12), sticky="w")
+        ).grid(row=2, column=0, padx=20, pady=(0, 4), sticky="w")
+
+        # ── Deadline info ─────────────────────────────────────────────────────────
+        if deadline_info["has_deadline"] and not done:
+            if deadline_info["is_overdue"]:
+                # Overdue — show in red
+                deadline_text = f"⚠️ Overdue by {abs(deadline_info['days_left'])} days"
+                deadline_color = "#DC2626"
+            else:
+                # Show days left and needed per month
+                deadline_text = (
+                    f"📅 {deadline_info['days_left']} days left  ·  "
+                    f"Save {format_money_short(deadline_info['needed_per_month'])}/month"
+                )
+                deadline_color = "#64748B"
+
+            ctk.CTkLabel(
+                card,
+                text=deadline_text,
+                font=ctk.CTkFont(size=12),
+                text_color=deadline_color,
+            ).grid(row=3, column=0, padx=20, pady=(0, 8), sticky="w")
 
         # Bottom action
+        action_row = 4 if deadline_info["has_deadline"] and not done else 3
+
         if done:
             ctk.CTkLabel(
                 card, text="✅ Goal reached!",
                 font=ctk.CTkFont(size=13, weight="bold"),
                 text_color="#16A34A",
-            ).grid(row=3, column=0, padx=20, pady=(0, 20), sticky="w")
+            ).grid(row=action_row, column=0, padx=20, pady=(0, 20), sticky="w")
         else:
             ctk.CTkButton(
                 card, text="+ Contribute",
@@ -150,7 +176,7 @@ class GoalsPage(ctk.CTkFrame):
                 text_color="#2563EB",
                 font=ctk.CTkFont(size=13, weight="bold"),
                 command=lambda g=goal: self._contribute(g),
-            ).grid(row=3, column=0, padx=20, pady=(0, 20), sticky="ew")
+            ).grid(row=action_row, column=0, padx=20, pady=(0, 20), sticky="ew")
 
     def _open_add_dialog(self):
         AddGoalDialog(self, self.user, on_save=self._load_goals)
@@ -175,7 +201,7 @@ class AddGoalDialog(ctk.CTkToplevel):
         self.on_save = on_save
 
         self.title("New Goal")
-        self.geometry("380x320")
+        self.geometry("380x400")
         self.resizable(False, False)
         self.grab_set()
         self.grid_columnconfigure(0, weight=1)
@@ -202,16 +228,26 @@ class AddGoalDialog(ctk.CTkToplevel):
         )
         self.amount_entry.grid(row=3, column=0, **pad)
 
+        # ── Deadline field ─────────────────────────────────────────
+        ctk.CTkLabel(self, text="Deadline (optional)", font=ctk.CTkFont(size=13),
+                     text_color="#64748B").grid(row=4, column=0, padx=28, pady=(16, 4), sticky="w")
+
+        self.deadline_entry = ctk.CTkEntry(
+            self, placeholder_text="DD.MM.YYYY",
+            font=ctk.CTkFont(size=14), height=40, corner_radius=8,
+        )
+        self.deadline_entry.grid(row=5, column=0, padx=28, sticky="ew")
+
         ctk.CTkButton(
             self, text="Create Goal",
             height=48, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=15, weight="bold"),
             command=self._save,
-        ).grid(row=4, column=0, padx=28, pady=28, sticky="ew")
+        ).grid(row=6, column=0, padx=28, pady=28, sticky="ew")
 
     def _save(self):
-        from utils.formatters import parse_money
+        from utils.formatters import parse_money, parse_date
         name = self.name_entry.get().strip()
         if not name:
             messagebox.showerror("Error", "Please enter a goal name")
@@ -222,8 +258,18 @@ class AddGoalDialog(ctk.CTkToplevel):
             messagebox.showerror("Error", "Invalid amount")
             return
 
+        # Parse deadline — optional
+        deadline = None
+        deadline_text = self.deadline_entry.get().strip()
+        if deadline_text:
+            try:
+                deadline = parse_date(deadline_text)
+            except ValueError:
+                messagebox.showerror("Error", "Invalid deadline. Use DD.MM.YYYY format")
+                return
+
         try:
-            add_goal(self.user, name, target_cents)
+            add_goal(self.user, name, target_cents, deadline=deadline)
         except ValueError as e:
             messagebox.showerror("Error", str(e))
             return

@@ -20,13 +20,60 @@ def get_goals(user) -> list[Goal]:
     return goals
 
 
-def add_goal(user, name: str, target_cents: int, icon: str = "🎯") -> Goal:
+def get_goal_deadline_info(goal) -> dict:
     """
-    Creates and saves a new savings goal.
+    Calculates deadline information for a goal.
 
-    Usage:
-        goal = add_goal(user, "Japan Trip", 200000, icon="✈️")
+    Returns:
+        {
+            "has_deadline":       True/False,
+            "days_left":          68,
+            "months_left":        2.3,
+            "needed_per_month":   580,   # cents — how much to save each month
+            "is_overdue":         False,
+        }
     """
+    from datetime import date as date_type
+    import math
+
+    if not goal.deadline:
+        return {
+            "has_deadline":      False,
+            "days_left":         None,
+            "months_left":       None,
+            "needed_per_month":  None,
+            "is_overdue":        False,
+        }
+
+    today          = date_type.today()
+    days_left      = (goal.deadline - today).days
+    is_overdue     = days_left < 0
+    months_left    = max(days_left / 30.44, 0)  # 30.44 = average days in month
+    remaining      = max(goal.target_cents - goal.current_cents, 0)
+
+    # How much to save per month to reach goal in time
+    if months_left > 0 and remaining > 0:
+        needed_per_month = math.ceil(remaining / months_left)
+    else:
+        needed_per_month = remaining  # pay it all now
+
+    logger.debug(
+        f"Goal '{goal.name}' deadline: {days_left} days left, "
+        f"need {needed_per_month} cents/month"
+    )
+
+    return {
+        "has_deadline":      True,
+        "days_left":         days_left,
+        "months_left":       round(months_left, 1),
+        "needed_per_month":  needed_per_month,
+        "is_overdue":        is_overdue,
+    }
+
+
+def add_goal(user, name: str, target_cents: int,
+             icon: str = "🎯", deadline=None) -> Goal:
+    """Creates and saves a new savings goal."""
     if not name.strip():
         raise ValueError("Goal name cannot be empty")
     if target_cents <= 0:
@@ -34,10 +81,11 @@ def add_goal(user, name: str, target_cents: int, icon: str = "🎯") -> Goal:
 
     with db:
         goal = Goal.create(
-            user=user,
-            name=name.strip(),
-            target_cents=target_cents,
-            icon=icon,
+            user         = user,
+            name         = name.strip(),
+            target_cents = target_cents,
+            icon         = icon,
+            deadline     = deadline,
         )
     logger.info(f"Created goal '{name}' with target {target_cents} cents")
     return goal

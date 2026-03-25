@@ -42,6 +42,7 @@ class TransactionsPage(ctk.CTkFrame):
         self.filter_category  = None    # Category object or None (= show all)
         self.filter_date_from = None    # date object or None (= no lower bound)
         self.filter_date_to   = None    # date object or None (= no upper bound)
+        self.search_var = ctk.StringVar()
 
         # Column 0 stretches to fill the window width
         self.grid_columnconfigure(0, weight=1)
@@ -97,20 +98,37 @@ class TransactionsPage(ctk.CTkFrame):
     # ── Filters ───────────────────────────────────────────────────────────────
 
     def _build_filters(self):
-        """
-        Filter bar between the header and the table.
-        Contains three filter types that can be combined:
-          1. Type segmented button — All / Income / Expense (instant)
-          2. Category dropdown — pick a specific category (instant)
-          3. Date range — From / To fields with Apply button (manual)
-        Reset button clears all filters at once.
-        """
-        filters = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=0, height=56)
+        filters = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=0, height=100)
         filters.grid(row=1, column=0, sticky="ew")
         filters.grid_propagate(False)
-        filters.grid_columnconfigure(4, weight=1)  # spacer column pushes date fields right
+        filters.grid_columnconfigure(4, weight=1)
 
-        # ── 1. Type filter: All / Income / Expense ────────────────────────────
+        # ── Search bar ────────────────────────────────────────────────────────────
+        search_row = ctk.CTkFrame(filters, fg_color="transparent")
+        search_row.grid(row=0, column=0, columnspan=8, padx=32, pady=(10, 0), sticky="ew")
+        search_row.grid_columnconfigure(0, weight=1)
+
+
+        self.search_var.trace("w", lambda *args: self._on_search())
+
+        self.search_entry = ctk.CTkEntry(
+            search_row,
+            textvariable=self.search_var,
+            placeholder_text="🔍 Search by category or note...",
+            height=34, corner_radius=8,
+            font=ctk.CTkFont(size=13),
+        )
+        self.search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+
+        ctk.CTkButton(
+            search_row, text="Search",
+            width=80, height=34, corner_radius=8,
+            fg_color="#2563EB", hover_color="#1D4ED8",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=self._on_search,
+        ).grid(row=0, column=1)
+
+        # ── Type / Category / Date filters ────────────────────────────────────────
         self.type_var = ctk.StringVar(value="All")
         ctk.CTkSegmentedButton(
             filters,
@@ -118,16 +136,14 @@ class TransactionsPage(ctk.CTkFrame):
             variable=self.type_var,
             font=ctk.CTkFont(size=12),
             width=200, height=32,
-            command=self._on_type_filter,  # fires immediately on click
-        ).grid(row=0, column=0, padx=(32, 12), pady=12)
+            command=self._on_type_filter,
+        ).grid(row=1, column=0, padx=(32, 12), pady=(8, 12))
 
-        # ── 2. Category filter: dropdown with all user + system categories ────
-        # Build a dict mapping display string → Category object for easy lookup
         categories = list(Category.select().where(
             (Category.user == self.user) | (Category.user.is_null())
         ).order_by(Category.name))
 
-        self.cat_options = {"All categories": None}  # None = no category filter
+        self.cat_options = {"All categories": None}
         for c in categories:
             self.cat_options[f"{c.icon} {c.name}"] = c
 
@@ -138,44 +154,41 @@ class TransactionsPage(ctk.CTkFrame):
             variable=self.cat_var,
             width=180, height=32, corner_radius=6,
             font=ctk.CTkFont(size=12),
-            command=self._on_category_filter,  # fires immediately on selection
-        ).grid(row=0, column=1, padx=(0, 12), pady=12)
+            command=self._on_category_filter,
+        ).grid(row=1, column=1, padx=(0, 12), pady=(8, 12))
 
-        # ── 3. Date range filter: From + To fields ────────────────────────────
         ctk.CTkLabel(
             filters, text="From:",
             font=ctk.CTkFont(size=12), text_color="#64748B",
-        ).grid(row=0, column=2, padx=(0, 4), pady=12)
+        ).grid(row=1, column=2, padx=(0, 4), pady=(8, 12))
 
         self.date_from_entry = ctk.CTkEntry(
             filters, placeholder_text="DD.MM.YYYY",
             width=110, height=32, corner_radius=6,
             font=ctk.CTkFont(size=12),
         )
-        self.date_from_entry.grid(row=0, column=3, padx=(0, 8), pady=12)
+        self.date_from_entry.grid(row=1, column=3, padx=(0, 8), pady=(8, 12))
 
         ctk.CTkLabel(
             filters, text="To:",
             font=ctk.CTkFont(size=12), text_color="#64748B",
-        ).grid(row=0, column=4, padx=(0, 4), pady=12, sticky="e")
+        ).grid(row=1, column=4, padx=(0, 4), pady=(8, 12), sticky="e")
 
         self.date_to_entry = ctk.CTkEntry(
             filters, placeholder_text="DD.MM.YYYY",
             width=110, height=32, corner_radius=6,
             font=ctk.CTkFont(size=12),
         )
-        self.date_to_entry.grid(row=0, column=5, padx=(0, 8), pady=12)
+        self.date_to_entry.grid(row=1, column=5, padx=(0, 8), pady=(8, 12))
 
-        # Apply — parses the date fields and refreshes the table
         ctk.CTkButton(
             filters, text="Apply",
             width=70, height=32, corner_radius=6,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=12, weight="bold"),
             command=self._apply_date_filter,
-        ).grid(row=0, column=6, padx=(0, 8), pady=12)
+        ).grid(row=1, column=6, padx=(0, 8), pady=(8, 12))
 
-        # Reset — clears ALL active filters (type + category + dates)
         ctk.CTkButton(
             filters, text="Reset",
             width=70, height=32, corner_radius=6,
@@ -183,7 +196,7 @@ class TransactionsPage(ctk.CTkFrame):
             text_color="#64748B",
             font=ctk.CTkFont(size=12),
             command=self._reset_filters,
-        ).grid(row=0, column=7, padx=(0, 32), pady=12)
+        ).grid(row=1, column=7, padx=(0, 32), pady=(8, 12))
 
     def _on_type_filter(self, value: str):
         """Called instantly when user clicks All / Income / Expense."""
@@ -218,23 +231,22 @@ class TransactionsPage(ctk.CTkFrame):
 
         self._load_rows()
 
-    def _reset_filters(self):
-        """
-        Clears all active filters and resets all filter widgets to their defaults.
-        Then refreshes the table to show all transactions.
-        """
-        # Reset filter state
-        self.filter_type      = "all"
-        self.filter_category  = None
-        self.filter_date_from = None
-        self.filter_date_to   = None
+    def _on_search(self):
+        text = self.search_entry.get().strip().lower()
+        print(f"Search text: '{text}'")
+        self._load_rows()
 
-        # Reset widgets to their default visual state
+    def _reset_filters(self):
+        """Clears all active filters including search."""
+        self.filter_type = "all"
+        self.filter_category = None
+        self.filter_date_from = None
+        self.filter_date_to = None
         self.type_var.set("All")
         self.cat_var.set("All categories")
         self.date_from_entry.delete(0, "end")
         self.date_to_entry.delete(0, "end")
-
+        self.search_entry.delete(0, "end")
         self._load_rows()
 
     # ── Table ─────────────────────────────────────────────────────────────────
@@ -277,16 +289,9 @@ class TransactionsPage(ctk.CTkFrame):
         self._load_rows()
 
     def _load_rows(self):
-        """
-        Clears and re-renders all transaction rows.
-        Applies all active filters before fetching from the database.
-        Called on first load and after every add / edit / delete / filter change.
-        """
-        # Destroy all existing row widgets before re-rendering
         for widget in self.rows_frame.winfo_children():
             widget.destroy()
 
-        # Convert "all" to None because get_transactions() expects None = no filter
         type_filter = None if self.filter_type == "all" else self.filter_type
 
         txs = get_transactions(
@@ -297,8 +302,16 @@ class TransactionsPage(ctk.CTkFrame):
             category=self.filter_category,
         )
 
+        # ── Apply search filter ───────────────────────────────────────────────────
+        search_text = self.search_entry.get().strip().lower()
+        if search_text:
+            txs = [
+                tx for tx in txs
+                if search_text in (tx.category.name.lower() if tx.category else "")
+                   or search_text in tx.note.lower()
+            ]
+
         if not txs:
-            # Empty state — shown when no transactions match the current filters
             ctk.CTkLabel(
                 self.rows_frame,
                 text="No transactions found.",
@@ -307,7 +320,6 @@ class TransactionsPage(ctk.CTkFrame):
             ).grid(row=0, column=0, columnspan=6, pady=48)
             return
 
-        # Alternating row background for readability (zebra striping)
         for i, tx in enumerate(txs):
             bg = "#FFFFFF" if i % 2 == 0 else "#F8FAFC"
             self._transaction_row(i, tx, bg)
