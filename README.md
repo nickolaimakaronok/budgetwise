@@ -370,6 +370,12 @@ python -m PyInstaller --noconfirm BudgetWise.spec
 
 ## Changelog
 
+### v1.5.0 (March 2026)
+- ✅ Search transactions by category and note
+- ✅ Goal deadlines — days left and needed per month
+- ✅ 147 automated tests — goal_service fully covered
+- ✅ Fixed CI — matplotlib added to GitHub Actions
+
 ### v1.4.0 (March 2026)
 - ✅ Recurring transactions — auto-create monthly with smart date handling
 - ✅ Repeat monthly checkbox in Add Transaction dialog
