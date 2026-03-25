@@ -9,7 +9,8 @@ from datetime import date
 from datetime import date as date_type
 from typing import Optional
 
-from main import logger
+import logging
+logger = logging.getLogger(__name__)
 from models.models import Transaction, Category, User
 from db.database import db
 
