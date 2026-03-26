@@ -1,7 +1,6 @@
 """
 ui/pages/goals.py
 Goals page — savings goals with progress bars.
-Now uses goal_service instead of direct DB access.
 """
 
 import logging
@@ -15,16 +14,24 @@ from utils.formatters import format_money_short, set_currency
 
 logger = logging.getLogger(__name__)
 
+# ── Theme colors — (light, dark) tuples ──────────────────────────────────────
+BG_PAGE        = ("#F8FAFC", "#1A1A2E")
+BG_CARD        = ("#FFFFFF", "#16213E")
+BG_HEADER      = ("#FFFFFF", "#0F0F23")
+BG_BAR         = ("#F1F5F9", "#0F3460")
+TEXT_PRIMARY   = ("#1E293B", "#E2E8F0")
+TEXT_SECONDARY = ("#64748B", "#94A3B8")
+TEXT_MUTED     = ("#94A3B8", "#64748B")
+HOVER_RED      = ("#FEE2E2", "#3D1A1A")
+HOVER_BLUE     = ("#EFF6FF", "#1E3A5F")
+BTN_CONTRIBUTE = ("#EFF6FF", "#1E3A5F")
+BTN_CONTRIBUTE_HOVER = ("#DBEAFE", "#1A4A7A")
+
 
 class GoalsPage(ctk.CTkFrame):
-    """
-    Savings goals page.
-    Shows active goals as cards in a two-column grid.
-    Each card has a progress bar, contribute button and archive button.
-    """
 
     def __init__(self, parent, user, app):
-        super().__init__(parent, fg_color="#F8FAFC", corner_radius=0)
+        super().__init__(parent, fg_color=BG_PAGE, corner_radius=0)
         self.user = user
         self.app  = app
         set_currency(user.currency)
@@ -36,7 +43,7 @@ class GoalsPage(ctk.CTkFrame):
         self._build_body()
 
     def _build_header(self):
-        header = ctk.CTkFrame(self, fg_color="#FFFFFF", corner_radius=0, height=72)
+        header = ctk.CTkFrame(self, fg_color=BG_HEADER, corner_radius=0, height=72)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_columnconfigure(0, weight=1)
         header.grid_propagate(False)
@@ -44,7 +51,7 @@ class GoalsPage(ctk.CTkFrame):
         ctk.CTkLabel(
             header, text="Goals",
             font=ctk.CTkFont(size=22, weight="bold"),
-            text_color="#1E293B",
+            text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
 
         ctk.CTkButton(
@@ -57,14 +64,13 @@ class GoalsPage(ctk.CTkFrame):
 
     def _build_body(self):
         self.body = ctk.CTkScrollableFrame(
-            self, fg_color="#F8FAFC", corner_radius=0
+            self, fg_color=BG_PAGE, corner_radius=0
         )
         self.body.grid(row=1, column=0, sticky="nsew", padx=32, pady=16)
         self.body.grid_columnconfigure((0, 1), weight=1)
         self._load_goals()
 
     def _load_goals(self):
-        """Clears and re-renders all active goal cards."""
         for w in self.body.winfo_children():
             w.destroy()
 
@@ -75,7 +81,7 @@ class GoalsPage(ctk.CTkFrame):
                 self.body,
                 text="No goals yet.\nClick '+ New Goal' to create one.",
                 font=ctk.CTkFont(size=14),
-                text_color="#94A3B8",
+                text_color=TEXT_MUTED,
                 justify="center",
             ).grid(row=0, column=0, columnspan=2, pady=60)
             return
@@ -87,14 +93,13 @@ class GoalsPage(ctk.CTkFrame):
 
     def _goal_card(self, row, col, goal):
         progress = get_goal_progress(goal)
-        pct = progress["percent"] / 100
+        pct  = progress["percent"] / 100
         done = progress["is_completed"]
 
-        # Get deadline info
         from services.goal_service import get_goal_deadline_info
         deadline_info = get_goal_deadline_info(goal)
 
-        card = ctk.CTkFrame(self.body, fg_color="#FFFFFF", corner_radius=12)
+        card = ctk.CTkFrame(self.body, fg_color=BG_CARD, corner_radius=12)
         card.grid(row=row, column=col,
                   padx=(0 if col == 0 else 12, 0),
                   pady=(0, 16), sticky="ew")
@@ -108,18 +113,18 @@ class GoalsPage(ctk.CTkFrame):
         ctk.CTkLabel(
             top, text=f"{goal.icon}  {goal.name}",
             font=ctk.CTkFont(size=16, weight="bold"),
-            text_color="#1E293B",
+            text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, sticky="w")
 
         ctk.CTkButton(
             top, text="✕", width=28, height=28, corner_radius=6,
-            fg_color="transparent", hover_color="#FEE2E2",
-            text_color="#94A3B8",
+            fg_color="transparent", hover_color=HOVER_RED,
+            text_color=TEXT_MUTED,
             command=lambda g=goal: self._archive(g),
         ).grid(row=0, column=1)
 
         # Progress bar
-        bar_bg = ctk.CTkFrame(card, fg_color="#F1F5F9", corner_radius=4, height=10)
+        bar_bg = ctk.CTkFrame(card, fg_color=BG_BAR, corner_radius=4, height=10)
         bar_bg.grid(row=1, column=0, padx=20, pady=(0, 8), sticky="ew")
         bar_bg.grid_propagate(False)
 
@@ -135,22 +140,20 @@ class GoalsPage(ctk.CTkFrame):
             text=f"{format_money_short(goal.current_cents)} / "
                  f"{format_money_short(goal.target_cents)}  ·  {progress['percent']}%",
             font=ctk.CTkFont(size=13),
-            text_color="#64748B",
+            text_color=TEXT_SECONDARY,
         ).grid(row=2, column=0, padx=20, pady=(0, 4), sticky="w")
 
-        # ── Deadline info ─────────────────────────────────────────────────────────
+        # Deadline info
         if deadline_info["has_deadline"] and not done:
             if deadline_info["is_overdue"]:
-                # Overdue — show in red
-                deadline_text = f"⚠️ Overdue by {abs(deadline_info['days_left'])} days"
+                deadline_text  = f"⚠️ Overdue by {abs(deadline_info['days_left'])} days"
                 deadline_color = "#DC2626"
             else:
-                # Show days left and needed per month
                 deadline_text = (
                     f"📅 {deadline_info['days_left']} days left  ·  "
                     f"Save {format_money_short(deadline_info['needed_per_month'])}/month"
                 )
-                deadline_color = "#64748B"
+                deadline_color = TEXT_SECONDARY
 
             ctk.CTkLabel(
                 card,
@@ -159,7 +162,6 @@ class GoalsPage(ctk.CTkFrame):
                 text_color=deadline_color,
             ).grid(row=3, column=0, padx=20, pady=(0, 8), sticky="w")
 
-        # Bottom action
         action_row = 4 if deadline_info["has_deadline"] and not done else 3
 
         if done:
@@ -172,8 +174,8 @@ class GoalsPage(ctk.CTkFrame):
             ctk.CTkButton(
                 card, text="+ Contribute",
                 height=34, corner_radius=8,
-                fg_color="#EFF6FF", hover_color="#DBEAFE",
-                text_color="#2563EB",
+                fg_color=BTN_CONTRIBUTE, hover_color=BTN_CONTRIBUTE_HOVER,
+                text_color=("#2563EB", "#3B82F6"),
                 font=ctk.CTkFont(size=13, weight="bold"),
                 command=lambda g=goal: self._contribute(g),
             ).grid(row=action_row, column=0, padx=20, pady=(0, 20), sticky="ew")
@@ -192,8 +194,9 @@ class GoalsPage(ctk.CTkFrame):
             self._load_goals()
 
 
+# ── Add Goal Dialog ───────────────────────────────────────────────────────────
+
 class AddGoalDialog(ctk.CTkToplevel):
-    """Dialog for creating a new savings goal."""
 
     def __init__(self, parent, user, on_save):
         super().__init__(parent)
@@ -211,7 +214,7 @@ class AddGoalDialog(ctk.CTkToplevel):
         pad = {"padx": 28, "sticky": "ew"}
 
         ctk.CTkLabel(self, text="Goal name", font=ctk.CTkFont(size=13),
-                     text_color="#64748B").grid(row=0, column=0, padx=28, pady=(28, 4), sticky="w")
+                     text_color=TEXT_SECONDARY).grid(row=0, column=0, padx=28, pady=(28, 4), sticky="w")
         self.name_entry = ctk.CTkEntry(
             self, placeholder_text="e.g. Japan trip",
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
@@ -220,7 +223,7 @@ class AddGoalDialog(ctk.CTkToplevel):
         self.name_entry.focus()
 
         ctk.CTkLabel(self, text="Target amount", font=ctk.CTkFont(size=13),
-                     text_color="#64748B").grid(row=2, column=0, padx=28, pady=(16, 4), sticky="w")
+                     text_color=TEXT_SECONDARY).grid(row=2, column=0, padx=28, pady=(16, 4), sticky="w")
         self.amount_entry = ctk.CTkEntry(
             self, placeholder_text="1000.00",
             font=ctk.CTkFont(size=22, weight="bold"),
@@ -228,10 +231,8 @@ class AddGoalDialog(ctk.CTkToplevel):
         )
         self.amount_entry.grid(row=3, column=0, **pad)
 
-        # ── Deadline field ─────────────────────────────────────────
         ctk.CTkLabel(self, text="Deadline (optional)", font=ctk.CTkFont(size=13),
-                     text_color="#64748B").grid(row=4, column=0, padx=28, pady=(16, 4), sticky="w")
-
+                     text_color=TEXT_SECONDARY).grid(row=4, column=0, padx=28, pady=(16, 4), sticky="w")
         self.deadline_entry = ctk.CTkEntry(
             self, placeholder_text="DD.MM.YYYY",
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
@@ -258,8 +259,7 @@ class AddGoalDialog(ctk.CTkToplevel):
             messagebox.showerror("Error", "Invalid amount")
             return
 
-        # Parse deadline — optional
-        deadline = None
+        deadline      = None
         deadline_text = self.deadline_entry.get().strip()
         if deadline_text:
             try:
@@ -278,8 +278,9 @@ class AddGoalDialog(ctk.CTkToplevel):
         self.destroy()
 
 
+# ── Contribute Dialog ─────────────────────────────────────────────────────────
+
 class ContributeDialog(ctk.CTkToplevel):
-    """Dialog for adding money to an existing goal."""
 
     def __init__(self, parent, goal, on_save):
         super().__init__(parent)
@@ -298,7 +299,7 @@ class ContributeDialog(ctk.CTkToplevel):
             self,
             text=f"{self.goal.icon} {self.goal.name}",
             font=ctk.CTkFont(size=16, weight="bold"),
-            text_color="#1E293B",
+            text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=28, pady=(28, 4), sticky="w")
 
         ctk.CTkLabel(
@@ -306,7 +307,7 @@ class ContributeDialog(ctk.CTkToplevel):
             text=f"{format_money_short(self.goal.current_cents)} / "
                  f"{format_money_short(self.goal.target_cents)}",
             font=ctk.CTkFont(size=13),
-            text_color="#64748B",
+            text_color=TEXT_SECONDARY,
         ).grid(row=1, column=0, padx=28, pady=(0, 16), sticky="w")
 
         self.amount_entry = ctk.CTkEntry(
