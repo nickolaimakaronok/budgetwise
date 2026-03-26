@@ -370,6 +370,15 @@ python -m PyInstaller --noconfirm BudgetWise.spec
 
 ## Changelog
 
+
+**Version:** 1.6.0
+
+### v1.6.0 (March 2026)
+- 🌙 Dark theme across all pages
+- 📄 PDF monthly report export
+- 📈 Yearly income vs expense chart in Analytics
+- 🔧 Fixed CI — matplotlib and reportlab in GitHub Actions
+
 ### v1.5.0 (March 2026)
 - ✅ Search transactions by category and note
 - ✅ Goal deadlines — days left and needed per month
