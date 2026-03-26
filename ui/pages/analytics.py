@@ -8,6 +8,7 @@ from datetime import date
 from calendar import monthrange
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from services.analytics_service import (
@@ -105,6 +106,7 @@ class AnalyticsPage(ctk.CTkFrame):
         self._build_pie_chart(categories)
         self._build_bar_chart(daily)
         self._build_category_table(categories)
+        self._build_yearly_chart(self.scroll)
 
     # ── Summary cards ─────────────────────────────────────────────────────────
 
@@ -150,7 +152,7 @@ class AnalyticsPage(ctk.CTkFrame):
             ).grid(row=1, column=0, padx=24, pady=(0, 24))
             return
 
-        labels = [f"{c['icon']} {c['category'].name}" for c in categories]
+        labels = [c['category'].name for c in categories]
         sizes  = [c["spent_cents"] for c in categories]
         colors = [c["color"] for c in categories]
 
@@ -261,3 +263,55 @@ class AnalyticsPage(ctk.CTkFrame):
                 font=ctk.CTkFont(size=13, weight="bold"), text_color="#1E293B",
                 width=160,
             ).grid(row=0, column=2, padx=24, pady=12, sticky="e")
+
+
+
+    def _build_yearly_chart(self, parent):
+        from services.analytics_service import get_yearly_totals
+
+        data    = get_yearly_totals(self.user, self.year)
+        months  = [d["month"] for d in data]
+        income  = [d["income"]  / 100 for d in data]
+        expense = [d["expense"] / 100 for d in data]
+
+        month_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+        card = ctk.CTkFrame(parent, fg_color="#FFFFFF", corner_radius=12)
+        card.grid(row=4, column=0, padx=32, pady=(0, 32), sticky="ew")
+
+        ctk.CTkLabel(
+            card, text=f"Year Overview — {self.year}",
+            font=ctk.CTkFont(size=15, weight="bold"), text_color="#1E293B",
+        ).grid(row=0, column=0, padx=24, pady=(20, 12), sticky="w")
+
+        fig, ax = plt.subplots(figsize=(7, 3.5), facecolor="white")
+        ax.set_facecolor("white")
+
+        ax.plot(months, income,  color="#16A34A", linewidth=2.5,
+                marker="o", markersize=5, label="Income")
+        ax.plot(months, expense, color="#DC2626", linewidth=2.5,
+                marker="o", markersize=5, label="Expenses")
+
+        ax.fill_between(months, income,  alpha=0.08, color="#16A34A")
+        ax.fill_between(months, expense, alpha=0.08, color="#DC2626")
+
+        ax.set_xticks(months)
+        ax.set_xticklabels(month_labels, fontsize=9, color="#64748B")
+        ax.tick_params(axis="y", labelsize=9, colors="#64748B")
+        ax.yaxis.set_major_formatter(
+            ticker.FuncFormatter(lambda x, _: f"{int(x):,}".replace(",", " "))
+        )
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_color("#E2E8F0")
+        ax.spines["bottom"].set_color("#E2E8F0")
+        ax.yaxis.grid(True, color="#F1F5F9", linewidth=1)
+        ax.legend(loc="upper right", fontsize=10,
+                  framealpha=0, labelcolor="#64748B")
+        fig.tight_layout(pad=1.5)
+
+        canvas = FigureCanvasTkAgg(fig, master=card)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=1, column=0, padx=24, pady=(0, 20), sticky="ew")
+        plt.close(fig)

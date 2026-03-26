@@ -12,6 +12,6 @@ unset CONDA_DEFAULT_ENV
 unset CONDA_PREFIX
 
 # Run PyInstaller with clean env
-python -m PyInstaller --noconfirm --clean BudgetWise.spec
+.venv/bin/python3 -m PyInstaller --noconfirm --clean BudgetWise.spec
 
 echo "✅ Done! Run: open dist/BudgetWise.app"

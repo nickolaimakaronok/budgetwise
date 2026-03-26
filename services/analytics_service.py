@@ -135,6 +135,8 @@ def get_daily_totals(
     return result
 
 
+
+
 def get_monthly_totals(user: User, year: int) -> list[dict]:
     """
     Returns income and expense totals for each month of a year.
@@ -213,3 +215,24 @@ def get_month_summary(user: User, year: int, month: int) -> dict:
         "days_left":       days_left,
         "daily_avg_cents": daily_avg,
     }
+
+
+def get_yearly_totals(user, year: int) -> list[dict]:
+    """
+    Returns monthly income and expense totals for a given year.
+
+    Returns list of 12 dicts:
+    [
+        {"month": 1, "income": 350000, "expense": 146000},
+        ...
+    ]
+    """
+    monthly = get_monthly_totals(user, year)
+    return [
+        {
+            "month":   m["month"],
+            "income":  m["income_cents"],
+            "expense": m["expense_cents"],
+        }
+        for m in monthly
+    ]
