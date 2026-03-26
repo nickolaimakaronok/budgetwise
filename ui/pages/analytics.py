@@ -194,7 +194,7 @@ class AnalyticsPage(ctk.CTkFrame):
 
         ax.legend(
             wedges, labels,
-            loc="center left", bbox_to_anchor=(0.85, 0.5),
+            loc="center left", bbox_to_anchor=(1.05, 0.5),
             fontsize=9, frameon=False,
             labelcolor=_chart_text(),
         )

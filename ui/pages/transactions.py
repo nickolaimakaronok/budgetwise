@@ -75,12 +75,21 @@ class TransactionsPage(ctk.CTkFrame):
         ).grid(row=0, column=0, padx=(0, 8))
 
         ctk.CTkButton(
+            btn_frame, text="📄 Export PDF",
+            width=130, height=36, corner_radius=8,
+            fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER,
+            text_color=TEXT_PRIMARY,
+            font=ctk.CTkFont(size=13),
+            command=self._export_pdf,
+        ).grid(row=0, column=1, padx=(0, 8))
+
+        ctk.CTkButton(
             btn_frame, text="+ Add Transaction",
             width=160, height=36, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=13, weight="bold"),
             command=self._open_add_dialog,
-        ).grid(row=0, column=1)
+        ).grid(row=0, column=2)
 
     def _build_filters(self):
         filters = ctk.CTkFrame(self, fg_color=BG_HEADER, corner_radius=0, height=100)
@@ -373,6 +382,30 @@ class TransactionsPage(ctk.CTkFrame):
             "Export complete",
             f"Saved {len(txs)} transactions to:\n{filepath}"
         )
+
+    def _export_pdf(self):
+        from tkinter import filedialog, messagebox
+        from datetime import date
+        from services.pdf_service import generate_monthly_report
+
+        today = date.today()
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+        default_name = f"BudgetWise_{month_names[today.month - 1]}_{today.year}.pdf"
+
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf")],
+            initialfile=default_name,
+            title="Export PDF Report",
+        )
+        if not filepath:
+            return
+
+        generate_monthly_report(self.user, today.year, today.month, filepath)
+        messagebox.showinfo("Export complete", f"Report saved to:\n{filepath}")
 
     def _open_add_dialog(self):
         AddTransactionDialog(self, self.user, on_save=self._load_rows)
