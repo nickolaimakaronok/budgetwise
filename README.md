@@ -4,7 +4,7 @@
 [⬇️ Download latest release](https://github.com/nickolaimakaronok/budgetwise/releases/latest)
 
 ## Demo
-[▶️ Watch demo on YouTube](https://youtu.be/3ziouV88AUc)
+[▶️ Watch demo on YouTube](https://youtu.be/-BR_jM5aqeQ)
 
 > A personal finance desktop app for macOS built entirely in Python.
 > Track income and expenses, set budget limits, manage savings goals, and visualize spending analytics.
