@@ -370,8 +370,12 @@ python -m PyInstaller --noconfirm BudgetWise.spec
 
 ## Changelog
 
+**Version:** 1.7.0
 
-**Version:** 1.6.0
+### v1.7.0 (March 2026)
+- 🌍 Localization — English, Russian, German
+- 🗂 System categories translated in DB on language change
+- 🔄 Navigation labels update with language
 
 ### v1.6.0 (March 2026)
 - 🌙 Dark theme across all pages
