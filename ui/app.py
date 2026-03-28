@@ -7,6 +7,7 @@ import customtkinter as ctk
 from utils.constants import (
     APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, SIDEBAR_WIDTH, NAV_ITEMS, COLOR
 )
+from utils.i18n import t
 
 
 class App(ctk.CTk):
@@ -15,19 +16,16 @@ class App(ctk.CTk):
         super().__init__()
         self.user = user
 
-        # ── Window setup ──────────────────────────────────────────────────────
         self.title(APP_NAME)
         self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
         self.minsize(900, 600)
 
-        # ── Layout: sidebar + main area ───────────────────────────────────────
-        self.grid_columnconfigure(1, weight=1)  # main area stretches
+        self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
         self._build_sidebar()
         self._build_main_area()
 
-        # ── Load default page ─────────────────────────────────────────────────
         self.nav_buttons = {}
         self._build_nav_buttons()
         self.show_page("dashboard")
@@ -40,10 +38,9 @@ class App(ctk.CTk):
             fg_color="#1E293B"
         )
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(8, weight=1)  # pushes settings to bottom
+        self.sidebar.grid_rowconfigure(8, weight=1)
         self.sidebar.grid_propagate(False)
 
-        # App name at top
         ctk.CTkLabel(
             self.sidebar,
             text="💰 BudgetWise",
@@ -52,8 +49,9 @@ class App(ctk.CTk):
         ).grid(row=0, column=0, padx=20, pady=(28, 24), sticky="w")
 
     def _build_nav_buttons(self):
-        """Creates one nav button per NAV_ITEM."""
-        for i, (page_id, emoji, label) in enumerate(NAV_ITEMS):
+        """Creates one nav button per NAV_ITEM using t() for labels."""
+        for i, (page_id, emoji, i18n_key) in enumerate(NAV_ITEMS):
+            label = t(i18n_key)
             btn = ctk.CTkButton(
                 self.sidebar,
                 text=f"  {emoji}  {label}",
@@ -67,10 +65,16 @@ class App(ctk.CTk):
                 font=ctk.CTkFont(size=14),
                 command=lambda pid=page_id: self.show_page(pid),
             )
-            # Settings button sticks to bottom
             row = 9 if page_id == "settings" else i + 1
             btn.grid(row=row, column=0, padx=12, pady=3, sticky="ew")
             self.nav_buttons[page_id] = btn
+
+    def rebuild_nav(self):
+        """Rebuilds nav buttons with updated language labels."""
+        for btn in self.nav_buttons.values():
+            btn.destroy()
+        self.nav_buttons = {}
+        self._build_nav_buttons()
 
     # ── Main area ─────────────────────────────────────────────────────────────
 
@@ -83,26 +87,20 @@ class App(ctk.CTk):
         self.main_area.grid_columnconfigure(0, weight=1)
         self.main_area.grid_rowconfigure(0, weight=1)
 
-        # Placeholder — will be replaced by pages
         self.current_frame = None
 
     # ── Navigation ────────────────────────────────────────────────────────────
 
     def show_page(self, page_id: str):
-        """Destroys current page and loads the new one."""
-
-        # Highlight active nav button
         for pid, btn in self.nav_buttons.items():
             if pid == page_id:
                 btn.configure(fg_color="#2563EB", text_color="#FFFFFF")
             else:
                 btn.configure(fg_color="transparent", text_color="#94A3B8")
 
-        # Destroy old page
         if self.current_frame is not None:
             self.current_frame.destroy()
 
-        # Load new page
         self.current_frame = self._load_page(page_id)
         if self.current_frame:
             self.current_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)

@@ -25,7 +25,6 @@ HOVER_RED      = ("#FEE2E2", "#3D1A1A")
 BTN_SECONDARY  = ("#F1F5F9", "#0F3460")
 BTN_SECONDARY_HOVER = ("#E2E8F0", "#1A4A7A")
 
-# Language display names
 LANGUAGE_OPTIONS = {
     "English": "en",
     "Русский": "ru",
@@ -47,8 +46,6 @@ class SettingsPage(ctk.CTkFrame):
         self._build_header()
         self._build_body()
 
-    # ── Header ────────────────────────────────────────────────────────────────
-
     def _build_header(self):
         header = ctk.CTkFrame(self, fg_color=BG_HEADER, corner_radius=0, height=72)
         header.grid(row=0, column=0, sticky="ew")
@@ -59,8 +56,6 @@ class SettingsPage(ctk.CTkFrame):
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
-
-    # ── Body ──────────────────────────────────────────────────────────────────
 
     def _build_body(self):
         scroll = ctk.CTkScrollableFrame(
@@ -74,7 +69,7 @@ class SettingsPage(ctk.CTkFrame):
         self._section_categories(scroll, 2)
         self._section_data(scroll, 3)
 
-    # ── Profile section ───────────────────────────────────────────────────────
+    # ── Profile ───────────────────────────────────────────────────────────────
 
     def _section_profile(self, parent, row):
         card = self._card(parent, row, t("profile"))
@@ -121,12 +116,11 @@ class SettingsPage(ctk.CTkFrame):
         set_currency(self.user.currency)
         messagebox.showinfo(t("saved_title"), t("profile_saved"))
 
-    # ── Appearance section ────────────────────────────────────────────────────
+    # ── Appearance ────────────────────────────────────────────────────────────
 
     def _section_appearance(self, parent, row):
         card = self._card(parent, row, t("appearance"))
 
-        # Theme
         self._label(card, t("theme"), 1)
         self.theme_var = ctk.StringVar(value=ctk.get_appearance_mode())
         ctk.CTkSegmentedButton(
@@ -137,7 +131,6 @@ class SettingsPage(ctk.CTkFrame):
             command=self._change_theme,
         ).grid(row=2, column=0, padx=24, pady=(0, 16), sticky="ew")
 
-        # Language
         self._label(card, t("language"), 3)
         current_lang_display = LANGUAGE_REVERSE.get(get_language(), "English")
         self.language_var = ctk.StringVar(value=current_lang_display)
@@ -158,15 +151,28 @@ class SettingsPage(ctk.CTkFrame):
         ctk.set_appearance_mode(theme_map.get(value, value))
 
     def _change_language(self, value):
+        from utils.category_translations import update_system_category_translations
+
         lang_code = LANGUAGE_OPTIONS.get(value, "en")
+
+        # 1. Update i18n language
         set_language(lang_code)
+
+        # 2. Save to user profile
         with db:
             self.user.language = lang_code
             self.user.save()
-        # Reload the page so all labels update
+
+        # 3. Update system category names in DB
+        update_system_category_translations(lang_code)
+
+        # 4. Rebuild nav labels
+        self.app.rebuild_nav()
+
+        # 5. Reload settings page
         self.app.show_page("settings")
 
-    # ── Categories section ────────────────────────────────────────────────────
+    # ── Categories ────────────────────────────────────────────────────────────
 
     def _section_categories(self, parent, row):
         card = self._card(parent, row, t("custom_categories"))
@@ -251,7 +257,7 @@ class SettingsPage(ctk.CTkFrame):
                 cat.save()
             self.app.show_page("settings")
 
-    # ── Data section ──────────────────────────────────────────────────────────
+    # ── Data ──────────────────────────────────────────────────────────────────
 
     def _section_data(self, parent, row):
         card = self._card(parent, row, t("data_backup"))
