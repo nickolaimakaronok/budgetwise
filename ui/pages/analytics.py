@@ -15,6 +15,7 @@ from services.analytics_service import (
     get_spending_by_category, get_daily_totals, get_month_summary
 )
 from utils.formatters import format_money_short, set_currency
+from utils.i18n import t, months_list
 
 # ── Theme colors — (light, dark) tuples ──────────────────────────────────────
 BG_PAGE        = ("#F8FAFC", "#1A1A2E")
@@ -27,7 +28,6 @@ TEXT_PRIMARY   = ("#1E293B", "#E2E8F0")
 TEXT_SECONDARY = ("#64748B", "#94A3B8")
 TEXT_MUTED     = ("#94A3B8", "#64748B")
 
-# matplotlib colors per theme
 def _is_dark():
     return ctk.get_appearance_mode() == "Dark"
 
@@ -62,8 +62,6 @@ class AnalyticsPage(ctk.CTkFrame):
         self._build_header()
         self._build_body()
 
-    # ── Header ────────────────────────────────────────────────────────────────
-
     def _build_header(self):
         header = ctk.CTkFrame(self, fg_color=BG_HEADER, corner_radius=0, height=72)
         header.grid(row=0, column=0, sticky="ew")
@@ -71,20 +69,16 @@ class AnalyticsPage(ctk.CTkFrame):
         header.grid_propagate(False)
 
         ctk.CTkLabel(
-            header, text="Analytics",
+            header, text=t("analytics"),
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
 
-        months = [
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        ]
-        self.month_var = ctk.StringVar(value=months[self.month - 1])
+        self.month_var = ctk.StringVar(value=months_list()[self.month - 1])
 
         ctk.CTkOptionMenu(
             header,
-            values=months,
+            values=months_list(),
             variable=self.month_var,
             width=140, height=34, corner_radius=8,
             font=ctk.CTkFont(size=13),
@@ -92,14 +86,8 @@ class AnalyticsPage(ctk.CTkFrame):
         ).grid(row=0, column=1, padx=32, pady=16, sticky="e")
 
     def _on_month_change(self, value):
-        months = [
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        ]
-        self.month = months.index(value) + 1
+        self.month = months_list().index(value) + 1
         self._refresh()
-
-    # ── Body ──────────────────────────────────────────────────────────────────
 
     def _build_body(self):
         self.scroll = ctk.CTkScrollableFrame(
@@ -130,17 +118,15 @@ class AnalyticsPage(ctk.CTkFrame):
         self._build_category_table(categories)
         self._build_yearly_chart(self.scroll)
 
-    # ── Summary cards ─────────────────────────────────────────────────────────
-
     def _build_summary_cards(self, summary):
         row = ctk.CTkFrame(self.scroll, fg_color="transparent")
         row.grid(row=0, column=0, padx=32, pady=(24, 16), sticky="ew")
         row.grid_columnconfigure((0, 1, 2), weight=1)
 
         cards = [
-            ("📥 Income",   summary["income_cents"],  "#16A34A"),
-            ("📤 Expenses", summary["expense_cents"], "#DC2626"),
-            ("🏦 Saved",    summary["balance_cents"], "#2563EB"),
+            (f"📥 {t('income')}",   summary["income_cents"],  "#16A34A"),
+            (f"📤 {t('expenses')}", summary["expense_cents"], "#DC2626"),
+            (f"🏦 {t('saved')}",    summary["balance_cents"], "#2563EB"),
         ]
         for i, (label, cents, color) in enumerate(cards):
             card = ctk.CTkFrame(row, fg_color=BG_CARD, corner_radius=12)
@@ -156,25 +142,23 @@ class AnalyticsPage(ctk.CTkFrame):
                 font=ctk.CTkFont(size=20, weight="bold"), text_color=color,
             ).grid(row=1, column=0, padx=20, pady=(0, 16), sticky="w")
 
-    # ── Pie chart ─────────────────────────────────────────────────────────────
-
     def _build_pie_chart(self, categories):
         card = ctk.CTkFrame(self.scroll, fg_color=BG_CARD, corner_radius=12)
         card.grid(row=1, column=0, padx=32, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
-            card, text="Spending by Category",
+            card, text=t("spending_by_category"),
             font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=24, pady=(20, 12), sticky="w")
 
         if not categories:
             ctk.CTkLabel(
-                card, text="No expense data for this month.",
+                card, text=t("no_expense_data"),
                 font=ctk.CTkFont(size=13), text_color=TEXT_MUTED,
             ).grid(row=1, column=0, padx=24, pady=(0, 24))
             return
 
-        bg = _chart_bg()
+        bg     = _chart_bg()
         labels = [c['category'].name for c in categories]
         sizes  = [c["spent_cents"] for c in categories]
         colors = [c["color"] for c in categories]
@@ -187,10 +171,10 @@ class AnalyticsPage(ctk.CTkFrame):
             pctdistance=0.75,
             wedgeprops={"width": 0.6, "edgecolor": bg, "linewidth": 2},
         )
-        for t in autotexts:
-            t.set_fontsize(9)
-            t.set_color("white")
-            t.set_fontweight("bold")
+        for at in autotexts:
+            at.set_fontsize(9)
+            at.set_color("white")
+            at.set_fontweight("bold")
 
         ax.legend(
             wedges, labels,
@@ -205,14 +189,12 @@ class AnalyticsPage(ctk.CTkFrame):
         canvas.get_tk_widget().grid(row=1, column=0, padx=24, pady=(0, 20), sticky="ew")
         plt.close(fig)
 
-    # ── Bar chart ─────────────────────────────────────────────────────────────
-
     def _build_bar_chart(self, daily):
         card = ctk.CTkFrame(self.scroll, fg_color=BG_CARD, corner_radius=12)
         card.grid(row=2, column=0, padx=32, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
-            card, text="Daily Expenses",
+            card, text=t("daily_expenses"),
             font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=24, pady=(20, 12), sticky="w")
 
@@ -246,8 +228,6 @@ class AnalyticsPage(ctk.CTkFrame):
         canvas.get_tk_widget().grid(row=1, column=0, padx=24, pady=(0, 20), sticky="ew")
         plt.close(fig)
 
-    # ── Category breakdown table ──────────────────────────────────────────────
-
     def _build_category_table(self, categories):
         if not categories:
             return
@@ -257,7 +237,7 @@ class AnalyticsPage(ctk.CTkFrame):
         card.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(
-            card, text="Breakdown",
+            card, text=t("breakdown"),
             font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, columnspan=3, padx=24, pady=(20, 12), sticky="w")
 
@@ -291,8 +271,6 @@ class AnalyticsPage(ctk.CTkFrame):
                 width=160,
             ).grid(row=0, column=2, padx=24, pady=12, sticky="e")
 
-    # ── Yearly chart ──────────────────────────────────────────────────────────
-
     def _build_yearly_chart(self, parent):
         from services.analytics_service import get_yearly_totals
 
@@ -301,19 +279,20 @@ class AnalyticsPage(ctk.CTkFrame):
         income  = [d["income"]  / 100 for d in data]
         expense = [d["expense"] / 100 for d in data]
 
+        # Short month labels (always in English for chart axis)
         month_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-        bg     = _chart_bg()
-        text_c = _chart_text()
-        grid_c = _chart_grid()
+        bg      = _chart_bg()
+        text_c  = _chart_text()
+        grid_c  = _chart_grid()
         spine_c = _chart_spine()
 
         card = ctk.CTkFrame(parent, fg_color=BG_CARD, corner_radius=12)
         card.grid(row=4, column=0, padx=32, pady=(0, 32), sticky="ew")
 
         ctk.CTkLabel(
-            card, text=f"Year Overview — {self.year}",
+            card, text=t("year_overview", self.year),
             font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=24, pady=(20, 12), sticky="w")
 
@@ -321,9 +300,9 @@ class AnalyticsPage(ctk.CTkFrame):
         ax.set_facecolor(bg)
 
         ax.plot(months, income,  color="#16A34A", linewidth=2.5,
-                marker="o", markersize=5, label="Income")
+                marker="o", markersize=5, label=t("income"))
         ax.plot(months, expense, color="#DC2626", linewidth=2.5,
-                marker="o", markersize=5, label="Expenses")
+                marker="o", markersize=5, label=t("expenses"))
 
         ax.fill_between(months, income,  alpha=0.08, color="#16A34A")
         ax.fill_between(months, expense, alpha=0.08, color="#DC2626")
@@ -339,8 +318,7 @@ class AnalyticsPage(ctk.CTkFrame):
         ax.spines["left"].set_color(spine_c)
         ax.spines["bottom"].set_color(spine_c)
         ax.yaxis.grid(True, color=grid_c, linewidth=1)
-        ax.legend(loc="upper right", fontsize=10,
-                  framealpha=0, labelcolor=text_c)
+        ax.legend(loc="upper right", fontsize=10, framealpha=0, labelcolor=text_c)
         fig.tight_layout(pad=1.5)
 
         canvas = FigureCanvasTkAgg(fig, master=card)

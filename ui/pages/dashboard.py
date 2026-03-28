@@ -8,6 +8,7 @@ from datetime import date
 from services.analytics_service import get_month_summary
 from services.transaction_service import get_recent_transactions
 from utils.formatters import format_money, format_money_short, format_date_short, set_currency
+from utils.i18n import t, months_list
 
 # ── Theme colors — (light, dark) tuples ──────────────────────────────────────
 BG_PAGE        = ("#F8FAFC", "#1A1A2E")
@@ -48,14 +49,16 @@ class DashboardPage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             header,
-            text="Dashboard",
+            text=t("dashboard"),
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
 
+        # Month name in current language + year
+        month_name = months_list()[today.month - 1]
         ctk.CTkLabel(
             header,
-            text=today.strftime("%B %Y"),
+            text=f"{month_name} {today.year}",
             font=ctk.CTkFont(size=14),
             text_color=TEXT_MUTED,
         ).grid(row=0, column=1, padx=32, pady=20, sticky="e")
@@ -85,7 +88,7 @@ class DashboardPage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             card,
-            text="Monthly Balance",
+            text=t("monthly_balance"),
             font=ctk.CTkFont(size=13),
             text_color=TEXT_MUTED,
         ).grid(row=0, column=0, padx=28, pady=(24, 4), sticky="w")
@@ -102,8 +105,8 @@ class DashboardPage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             card,
-            text=f"{summary['days_left']} days left this month  ·  "
-                 f"Daily avg: {format_money_short(summary['daily_avg_cents'])}",
+            text=f"{summary['days_left']} {t('days_left')}  ·  "
+                 f"{t('daily_avg')}: {format_money_short(summary['daily_avg_cents'])}",
             font=ctk.CTkFont(size=12),
             text_color=TEXT_SECONDARY,
         ).grid(row=2, column=0, padx=28, pady=(0, 24), sticky="w")
@@ -116,9 +119,9 @@ class DashboardPage(ctk.CTkFrame):
         row.grid_columnconfigure((0, 1, 2), weight=1)
 
         cards = [
-            ("Income",   summary["income_cents"],  "#16A34A", "📥"),
-            ("Expenses", summary["expense_cents"], "#DC2626", "📤"),
-            ("Saved",    summary["balance_cents"], "#2563EB", "🏦"),
+            (t("income"),   summary["income_cents"],  "#16A34A", "📥"),
+            (t("expenses"), summary["expense_cents"], "#DC2626", "📤"),
+            (t("saved"),    summary["balance_cents"], "#2563EB", "🏦"),
         ]
 
         for i, (label, amount, color, emoji) in enumerate(cards):
@@ -152,14 +155,14 @@ class DashboardPage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             title_row,
-            text="Recent Transactions",
+            text=t("recent_transactions"),
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, sticky="w")
 
         ctk.CTkButton(
             title_row,
-            text="See all →",
+            text=t("see_all"),
             width=80, height=28, corner_radius=6,
             fg_color="transparent",
             text_color=("#2563EB", "#3B82F6"),
@@ -177,7 +180,7 @@ class DashboardPage(ctk.CTkFrame):
         if not txs:
             ctk.CTkLabel(
                 container,
-                text="No transactions yet.\nAdd your first one!",
+                text=t("no_transactions_yet"),
                 font=ctk.CTkFont(size=14),
                 text_color=TEXT_MUTED,
                 justify="center",
@@ -206,7 +209,7 @@ class DashboardPage(ctk.CTkFrame):
             fg_color="transparent",
         ).grid(row=0, column=0, padx=(0, 12), pady=14)
 
-        name = tx.category.name if tx.category else "Uncategorized"
+        name = tx.category.name if tx.category else t("uncategorized")
         note = f"  {tx.note}" if tx.note else ""
         ctk.CTkLabel(
             row, text=f"{name}{note}",

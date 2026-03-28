@@ -1,6 +1,6 @@
 """
 ui/pages/settings.py
-Settings page — currency, appearance, categories, backup.
+Settings page — currency, appearance, language, categories, backup.
 """
 
 import customtkinter as ctk
@@ -11,6 +11,7 @@ from tkinter import messagebox
 from db.database import db, DB_PATH
 from models.models import Category, User
 from utils.formatters import set_currency
+from utils.i18n import t, set_language, get_language
 
 # ── Theme colors — (light, dark) tuples ──────────────────────────────────────
 BG_PAGE        = ("#F8FAFC", "#1A1A2E")
@@ -23,6 +24,14 @@ TEXT_MUTED     = ("#94A3B8", "#64748B")
 HOVER_RED      = ("#FEE2E2", "#3D1A1A")
 BTN_SECONDARY  = ("#F1F5F9", "#0F3460")
 BTN_SECONDARY_HOVER = ("#E2E8F0", "#1A4A7A")
+
+# Language display names
+LANGUAGE_OPTIONS = {
+    "English": "en",
+    "Русский": "ru",
+    "Deutsch": "de",
+}
+LANGUAGE_REVERSE = {v: k for k, v in LANGUAGE_OPTIONS.items()}
 
 
 class SettingsPage(ctk.CTkFrame):
@@ -46,7 +55,7 @@ class SettingsPage(ctk.CTkFrame):
         header.grid_propagate(False)
 
         ctk.CTkLabel(
-            header, text="Settings",
+            header, text=t("settings"),
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
@@ -68,16 +77,16 @@ class SettingsPage(ctk.CTkFrame):
     # ── Profile section ───────────────────────────────────────────────────────
 
     def _section_profile(self, parent, row):
-        card = self._card(parent, row, "👤  Profile")
+        card = self._card(parent, row, t("profile"))
 
-        self._label(card, "Your name", 1)
+        self._label(card, t("your_name"), 1)
         self.name_entry = ctk.CTkEntry(
             card, font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         )
         self.name_entry.insert(0, self.user.name)
         self.name_entry.grid(row=2, column=0, padx=24, pady=(0, 12), sticky="ew")
 
-        self._label(card, "Currency", 3)
+        self._label(card, t("currency"), 3)
         self.currency_var = ctk.StringVar(value=self.user.currency)
         ctk.CTkOptionMenu(
             card,
@@ -86,7 +95,7 @@ class SettingsPage(ctk.CTkFrame):
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         ).grid(row=4, column=0, padx=24, pady=(0, 12), sticky="ew")
 
-        self._label(card, "Budget month starts on day", 5)
+        self._label(card, t("month_starts"), 5)
         self.month_start_var = ctk.StringVar(value=str(self.user.month_start))
         ctk.CTkOptionMenu(
             card,
@@ -96,7 +105,7 @@ class SettingsPage(ctk.CTkFrame):
         ).grid(row=6, column=0, padx=24, pady=(0, 20), sticky="ew")
 
         ctk.CTkButton(
-            card, text="Save Profile",
+            card, text=t("save_profile"),
             height=40, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=14, weight="bold"),
@@ -110,30 +119,57 @@ class SettingsPage(ctk.CTkFrame):
             self.user.month_start = int(self.month_start_var.get())
             self.user.save()
         set_currency(self.user.currency)
-        messagebox.showinfo("Saved", "Profile updated successfully.")
+        messagebox.showinfo(t("saved_title"), t("profile_saved"))
 
     # ── Appearance section ────────────────────────────────────────────────────
 
     def _section_appearance(self, parent, row):
-        card = self._card(parent, row, "🎨  Appearance")
+        card = self._card(parent, row, t("appearance"))
 
-        self._label(card, "Theme", 1)
+        # Theme
+        self._label(card, t("theme"), 1)
         self.theme_var = ctk.StringVar(value=ctk.get_appearance_mode())
         ctk.CTkSegmentedButton(
             card,
-            values=["Light", "Dark", "System"],
+            values=[t("light"), t("dark"), t("system")],
             variable=self.theme_var,
             font=ctk.CTkFont(size=13),
             command=self._change_theme,
-        ).grid(row=2, column=0, padx=24, pady=(0, 24), sticky="ew")
+        ).grid(row=2, column=0, padx=24, pady=(0, 16), sticky="ew")
+
+        # Language
+        self._label(card, t("language"), 3)
+        current_lang_display = LANGUAGE_REVERSE.get(get_language(), "English")
+        self.language_var = ctk.StringVar(value=current_lang_display)
+        ctk.CTkOptionMenu(
+            card,
+            values=list(LANGUAGE_OPTIONS.keys()),
+            variable=self.language_var,
+            font=ctk.CTkFont(size=14), height=40, corner_radius=8,
+            command=self._change_language,
+        ).grid(row=4, column=0, padx=24, pady=(0, 24), sticky="ew")
 
     def _change_theme(self, value):
-        ctk.set_appearance_mode(value)
+        theme_map = {
+            t("light"):  "Light",
+            t("dark"):   "Dark",
+            t("system"): "System",
+        }
+        ctk.set_appearance_mode(theme_map.get(value, value))
+
+    def _change_language(self, value):
+        lang_code = LANGUAGE_OPTIONS.get(value, "en")
+        set_language(lang_code)
+        with db:
+            self.user.language = lang_code
+            self.user.save()
+        # Reload the page so all labels update
+        self.app.show_page("settings")
 
     # ── Categories section ────────────────────────────────────────────────────
 
     def _section_categories(self, parent, row):
-        card = self._card(parent, row, "🏷️  Custom Categories")
+        card = self._card(parent, row, t("custom_categories"))
 
         user_cats = list(Category.select().where(
             Category.user == self.user,
@@ -142,7 +178,7 @@ class SettingsPage(ctk.CTkFrame):
 
         if not user_cats:
             ctk.CTkLabel(
-                card, text="No custom categories yet.",
+                card, text=t("no_custom_categories"),
                 font=ctk.CTkFont(size=13), text_color=TEXT_MUTED,
             ).grid(row=1, column=0, padx=24, pady=(0, 12), sticky="w")
         else:
@@ -158,7 +194,7 @@ class SettingsPage(ctk.CTkFrame):
                 ).grid(row=0, column=0, padx=12, pady=10, sticky="w")
 
                 ctk.CTkButton(
-                    row_f, text="Archive", width=80, height=28,
+                    row_f, text=t("archive_category"), width=80, height=28,
                     corner_radius=6, fg_color="transparent",
                     hover_color=HOVER_RED, text_color="#DC2626",
                     font=ctk.CTkFont(size=12),
@@ -170,7 +206,7 @@ class SettingsPage(ctk.CTkFrame):
         add_row.grid_columnconfigure(0, weight=1)
 
         self.new_cat_entry = ctk.CTkEntry(
-            add_row, placeholder_text="Category name",
+            add_row, placeholder_text=t("cat_name_placeholder"),
             font=ctk.CTkFont(size=13), height=36, corner_radius=8,
         )
         self.new_cat_entry.grid(row=0, column=0, padx=(0, 8), sticky="ew")
@@ -184,7 +220,7 @@ class SettingsPage(ctk.CTkFrame):
         ).grid(row=0, column=1, padx=(0, 8))
 
         ctk.CTkButton(
-            add_row, text="+ Add",
+            add_row, text=t("add"),
             width=80, height=36, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=13, weight="bold"),
@@ -194,7 +230,7 @@ class SettingsPage(ctk.CTkFrame):
     def _add_category(self):
         name = self.new_cat_entry.get().strip()
         if not name:
-            messagebox.showerror("Error", "Please enter a category name")
+            messagebox.showerror(t("error"), t("cat_name_required"))
             return
         with db:
             Category.create(
@@ -205,7 +241,10 @@ class SettingsPage(ctk.CTkFrame):
         self.app.show_page("settings")
 
     def _archive_category(self, cat, card):
-        ok = messagebox.askyesno("Archive", f"Archive category '{cat.name}'?")
+        ok = messagebox.askyesno(
+            t("archive_category"),
+            t("archive_cat_confirm").format(cat.name),
+        )
         if ok:
             with db:
                 cat.is_archived = True
@@ -215,11 +254,11 @@ class SettingsPage(ctk.CTkFrame):
     # ── Data section ──────────────────────────────────────────────────────────
 
     def _section_data(self, parent, row):
-        card = self._card(parent, row, "💾  Data & Backup")
+        card = self._card(parent, row, t("data_backup"))
 
         ctk.CTkLabel(
             card,
-            text=f"Database: {DB_PATH}",
+            text=f"{t('database')} {DB_PATH}",
             font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,
         ).grid(row=1, column=0, padx=24, pady=(0, 16), sticky="w")
 
@@ -228,7 +267,7 @@ class SettingsPage(ctk.CTkFrame):
         btn_row.grid_columnconfigure((0, 1), weight=1)
 
         ctk.CTkButton(
-            btn_row, text="📦 Backup Database",
+            btn_row, text=t("backup_db"),
             height=40, corner_radius=8,
             fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER,
             text_color=TEXT_PRIMARY,
@@ -237,7 +276,7 @@ class SettingsPage(ctk.CTkFrame):
         ).grid(row=0, column=0, padx=(0, 8), sticky="ew")
 
         ctk.CTkButton(
-            btn_row, text="📂 Open Backup Folder",
+            btn_row, text=t("open_backup_folder"),
             height=40, corner_radius=8,
             fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER,
             text_color=TEXT_PRIMARY,
@@ -246,7 +285,7 @@ class SettingsPage(ctk.CTkFrame):
         ).grid(row=0, column=1, padx=(8, 0), sticky="ew")
 
         ctk.CTkButton(
-            card, text="🔔 Test Notifications",
+            card, text=t("test_notifications"),
             height=40, corner_radius=8,
             fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER,
             text_color=TEXT_PRIMARY,
@@ -260,7 +299,7 @@ class SettingsPage(ctk.CTkFrame):
         timestamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = os.path.join(backup_dir, f"budget_backup_{timestamp}.db")
         shutil.copy2(DB_PATH, backup_path)
-        messagebox.showinfo("Backup", f"Saved to:\n{backup_path}")
+        messagebox.showinfo("Backup", t("backup_saved").format(backup_path))
 
     def _open_backup_folder(self):
         backup_dir = os.path.join(os.path.dirname(DB_PATH), "backups")
@@ -291,13 +330,6 @@ class SettingsPage(ctk.CTkFrame):
         from utils.notifications import check_now
         sent = check_now(self.user)
         if sent == 0:
-            messagebox.showinfo(
-                "Notifications",
-                "No budget limits exceeded or in warning zone.\n"
-                "Add budget limits and transactions to test."
-            )
+            messagebox.showinfo("Notifications", t("notifications_none"))
         else:
-            messagebox.showinfo(
-                "Notifications",
-                f"Sent {sent} notification(s).\nCheck your macOS notification center."
-            )
+            messagebox.showinfo("Notifications", t("notifications_sent").format(sent))

@@ -27,6 +27,7 @@ class User(BaseModel):
     password_hash = TextField(default="")       # bcrypt hash or empty string
     currency      = TextField(default="USD")    # "USD" | "EUR" | "RUB" | "ILS"
     month_start   = IntegerField(default=1)     # Budget month start day (1–28)
+    language = TextField(default="en")
     created_at    = DateTimeField(default=datetime.now)
 
     class Meta:

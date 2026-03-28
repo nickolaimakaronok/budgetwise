@@ -12,6 +12,7 @@ from services.budget_service import (
 )
 from models.models import Category
 from utils.formatters import format_money_short, set_currency
+from utils.i18n import t, months_list
 
 # ── Theme colors — (light, dark) tuples ──────────────────────────────────────
 BG_PAGE        = ("#F8FAFC", "#1A1A2E")
@@ -45,8 +46,6 @@ class BudgetPage(ctk.CTkFrame):
         self._build_header()
         self._build_body()
 
-    # ── Header ────────────────────────────────────────────────────────────────
-
     def _build_header(self):
         header = ctk.CTkFrame(self, fg_color=BG_HEADER, corner_radius=0, height=72)
         header.grid(row=0, column=0, sticky="ew")
@@ -54,20 +53,16 @@ class BudgetPage(ctk.CTkFrame):
         header.grid_propagate(False)
 
         ctk.CTkLabel(
-            header, text="Budget",
+            header, text=t("budget"),
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
 
-        months = [
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        ]
-        self.month_var = ctk.StringVar(value=months[self.month - 1])
+        self.month_var = ctk.StringVar(value=months_list()[self.month - 1])
 
         ctk.CTkOptionMenu(
             header,
-            values=months,
+            values=months_list(),
             variable=self.month_var,
             width=140, height=34, corner_radius=8,
             font=ctk.CTkFont(size=13),
@@ -78,7 +73,7 @@ class BudgetPage(ctk.CTkFrame):
         btn_frame.grid(row=0, column=2, padx=32, pady=12, sticky="e")
 
         ctk.CTkButton(
-            btn_frame, text="Copy last month",
+            btn_frame, text=t("copy_last_month"),
             width=140, height=36, corner_radius=8,
             fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER,
             text_color=TEXT_PRIMARY,
@@ -87,21 +82,15 @@ class BudgetPage(ctk.CTkFrame):
         ).grid(row=0, column=0, padx=(0, 8))
 
         ctk.CTkButton(
-            btn_frame, text="+ Set Limit",
+            btn_frame, text=t("set_limit"),
             width=120, height=36, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=13, weight="bold"),
             command=self._open_set_limit_dialog,
         ).grid(row=0, column=1)
 
-    # ── Body ──────────────────────────────────────────────────────────────────
-
     def _on_month_change(self, value):
-        months = [
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        ]
-        self.month = months.index(value) + 1
+        self.month = months_list().index(value) + 1
         self._load_rows()
 
     def _build_body(self):
@@ -121,7 +110,7 @@ class BudgetPage(ctk.CTkFrame):
         if not rows:
             ctk.CTkLabel(
                 self.body,
-                text="No budget limits set.\nClick '+ Set Limit' to add one.",
+                text=t("no_budget_limits"),
                 font=ctk.CTkFont(size=14), text_color=TEXT_MUTED, justify="center",
             ).grid(row=0, column=0, pady=60)
             return
@@ -183,11 +172,9 @@ class BudgetPage(ctk.CTkFrame):
 
         ctk.CTkLabel(
             card,
-            text=f"Left: {format_money_short(row['left_cents'])}  ·  {row['percent']}%",
+            text=f"{t('left')} {format_money_short(row['left_cents'])}  ·  {row['percent']}%",
             font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,
         ).grid(row=2, column=0, padx=20, pady=(0, 16), sticky="w")
-
-    # ── Actions ───────────────────────────────────────────────────────────────
 
     def _open_set_limit_dialog(self):
         SetLimitDialog(self, self.user, self.year, self.month, on_save=self._load_rows)
@@ -197,10 +184,10 @@ class BudgetPage(ctk.CTkFrame):
         if copied:
             self._load_rows()
         else:
-            messagebox.showinfo("Copy last month", "No budget limits found in previous month.")
+            messagebox.showinfo(t("copy_last_month_title"), t("no_prev_month"))
 
     def _delete_budget(self, budget):
-        ok = messagebox.askyesno("Delete limit", "Remove this budget limit?")
+        ok = messagebox.askyesno(t("delete_limit"), t("remove_limit_confirm"))
         if ok:
             delete_budget(budget)
             self._load_rows()
@@ -217,7 +204,7 @@ class SetLimitDialog(ctk.CTkToplevel):
         self.month   = month
         self.on_save = on_save
 
-        self.title("Set Budget Limit")
+        self.title(t("set_budget_title"))
         self.geometry("380x320")
         self.resizable(False, False)
         self.grab_set()
@@ -228,7 +215,7 @@ class SetLimitDialog(ctk.CTkToplevel):
     def _build(self):
         pad = {"padx": 28, "sticky": "ew"}
 
-        ctk.CTkLabel(self, text="Category", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("category_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=0, column=0, padx=28, pady=(28, 4), sticky="w")
 
         categories = list(Category.select().where(
@@ -245,7 +232,7 @@ class SetLimitDialog(ctk.CTkToplevel):
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         ).grid(row=1, column=0, **pad)
 
-        ctk.CTkLabel(self, text="Monthly Limit", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("monthly_limit"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=2, column=0, padx=28, pady=(16, 4), sticky="w")
 
         self.limit_entry = ctk.CTkEntry(
@@ -257,7 +244,7 @@ class SetLimitDialog(ctk.CTkToplevel):
         self.limit_entry.focus()
 
         ctk.CTkButton(
-            self, text="Save Limit",
+            self, text=t("save_limit"),
             height=48, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=15, weight="bold"),
@@ -269,7 +256,7 @@ class SetLimitDialog(ctk.CTkToplevel):
         try:
             limit_cents = parse_money(self.limit_entry.get())
         except ValueError:
-            messagebox.showerror("Error", "Invalid amount. Enter a number like 500.00")
+            messagebox.showerror(t("error"), t("invalid_limit"))
             return
 
         category = self.cat_map.get(self.cat_var.get())

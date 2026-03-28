@@ -10,6 +10,7 @@ from tkinter import messagebox, filedialog
 from services.transaction_service import get_transactions, delete_transaction, update_transaction
 from models.models import Category
 from utils.formatters import format_money_short, format_date, set_currency, parse_money, parse_date
+from utils.i18n import t, months_list
 
 # ── Theme colors — (light, dark) tuples ──────────────────────────────────────
 BG_PAGE        = ("#F8FAFC", "#1A1A2E")
@@ -57,7 +58,7 @@ class TransactionsPage(ctk.CTkFrame):
         header.grid_propagate(False)
 
         ctk.CTkLabel(
-            header, text="Transactions",
+            header, text=t("transactions"),
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
@@ -66,7 +67,7 @@ class TransactionsPage(ctk.CTkFrame):
         btn_frame.grid(row=0, column=1, padx=32, pady=16, sticky="e")
 
         ctk.CTkButton(
-            btn_frame, text="⬇ Export CSV",
+            btn_frame, text=t("export_csv"),
             width=130, height=36, corner_radius=8,
             fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER,
             text_color=TEXT_PRIMARY,
@@ -75,7 +76,7 @@ class TransactionsPage(ctk.CTkFrame):
         ).grid(row=0, column=0, padx=(0, 8))
 
         ctk.CTkButton(
-            btn_frame, text="📄 Export PDF",
+            btn_frame, text=t("export_pdf"),
             width=130, height=36, corner_radius=8,
             fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER,
             text_color=TEXT_PRIMARY,
@@ -84,7 +85,7 @@ class TransactionsPage(ctk.CTkFrame):
         ).grid(row=0, column=1, padx=(0, 8))
 
         ctk.CTkButton(
-            btn_frame, text="+ Add Transaction",
+            btn_frame, text=t("add_transaction"),
             width=160, height=36, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=13, weight="bold"),
@@ -106,24 +107,24 @@ class TransactionsPage(ctk.CTkFrame):
         self.search_entry = ctk.CTkEntry(
             search_row,
             textvariable=self.search_var,
-            placeholder_text="🔍 Search by category or note...",
+            placeholder_text=t("search_placeholder"),
             height=34, corner_radius=8,
             font=ctk.CTkFont(size=13),
         )
         self.search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
         ctk.CTkButton(
-            search_row, text="Search",
+            search_row, text=t("search"),
             width=80, height=34, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=13, weight="bold"),
             command=self._on_search,
         ).grid(row=0, column=1)
 
-        self.type_var = ctk.StringVar(value="All")
+        self.type_var = ctk.StringVar(value=t("all"))
         ctk.CTkSegmentedButton(
             filters,
-            values=["All", "Income", "Expense"],
+            values=[t("all"), t("income"), t("expense")],
             variable=self.type_var,
             font=ctk.CTkFont(size=12),
             width=200, height=32,
@@ -134,11 +135,11 @@ class TransactionsPage(ctk.CTkFrame):
             (Category.user == self.user) | (Category.user.is_null())
         ).order_by(Category.name))
 
-        self.cat_options = {"All categories": None}
+        self.cat_options = {t("all_categories"): None}
         for c in categories:
             self.cat_options[f"{c.icon} {c.name}"] = c
 
-        self.cat_var = ctk.StringVar(value="All categories")
+        self.cat_var = ctk.StringVar(value=t("all_categories"))
         ctk.CTkOptionMenu(
             filters,
             values=list(self.cat_options.keys()),
@@ -149,7 +150,7 @@ class TransactionsPage(ctk.CTkFrame):
         ).grid(row=1, column=1, padx=(0, 12), pady=(8, 12))
 
         ctk.CTkLabel(
-            filters, text="From:",
+            filters, text=t("date_from"),
             font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,
         ).grid(row=1, column=2, padx=(0, 4), pady=(8, 12))
 
@@ -161,7 +162,7 @@ class TransactionsPage(ctk.CTkFrame):
         self.date_from_entry.grid(row=1, column=3, padx=(0, 8), pady=(8, 12))
 
         ctk.CTkLabel(
-            filters, text="To:",
+            filters, text=t("date_to"),
             font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,
         ).grid(row=1, column=4, padx=(0, 4), pady=(8, 12), sticky="e")
 
@@ -173,7 +174,7 @@ class TransactionsPage(ctk.CTkFrame):
         self.date_to_entry.grid(row=1, column=5, padx=(0, 8), pady=(8, 12))
 
         ctk.CTkButton(
-            filters, text="Apply",
+            filters, text=t("apply"),
             width=70, height=32, corner_radius=6,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=12, weight="bold"),
@@ -181,7 +182,7 @@ class TransactionsPage(ctk.CTkFrame):
         ).grid(row=1, column=6, padx=(0, 8), pady=(8, 12))
 
         ctk.CTkButton(
-            filters, text="Reset",
+            filters, text=t("reset"),
             width=70, height=32, corner_radius=6,
             fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER,
             text_color=TEXT_SECONDARY,
@@ -190,7 +191,13 @@ class TransactionsPage(ctk.CTkFrame):
         ).grid(row=1, column=7, padx=(0, 32), pady=(8, 12))
 
     def _on_type_filter(self, value: str):
-        self.filter_type = value.lower()
+        # Map translated value back to internal "all"/"income"/"expense"
+        mapping = {
+            t("all"):     "all",
+            t("income"):  "income",
+            t("expense"): "expense",
+        }
+        self.filter_type = mapping.get(value, "all")
         self._load_rows()
 
     def _on_category_filter(self, value: str):
@@ -204,13 +211,13 @@ class TransactionsPage(ctk.CTkFrame):
         try:
             self.filter_date_from = parse_date(from_text) if from_text else None
         except ValueError:
-            messagebox.showerror("Error", "Invalid 'From' date. Use DD.MM.YYYY")
+            messagebox.showerror(t("error"), "Invalid 'From' date. Use DD.MM.YYYY")
             return
 
         try:
             self.filter_date_to = parse_date(to_text) if to_text else None
         except ValueError:
-            messagebox.showerror("Error", "Invalid 'To' date. Use DD.MM.YYYY")
+            messagebox.showerror(t("error"), "Invalid 'To' date. Use DD.MM.YYYY")
             return
 
         self._load_rows()
@@ -223,8 +230,8 @@ class TransactionsPage(ctk.CTkFrame):
         self.filter_category  = None
         self.filter_date_from = None
         self.filter_date_to   = None
-        self.type_var.set("All")
-        self.cat_var.set("All categories")
+        self.type_var.set(t("all"))
+        self.cat_var.set(t("all_categories"))
         self.date_from_entry.delete(0, "end")
         self.date_to_entry.delete(0, "end")
         self.search_entry.delete(0, "end")
@@ -237,12 +244,12 @@ class TransactionsPage(ctk.CTkFrame):
         headers_frame.grid_columnconfigure(1, weight=1)
 
         for col, (text, width) in enumerate([
-            ("",         40),
-            ("Category",  0),
-            ("Date",    100),
-            ("Note",    180),
-            ("Amount",  120),
-            ("",        120),
+            ("",              40),
+            (t("category"),    0),
+            (t("date"),      100),
+            (t("note"),      180),
+            (t("amount"),    120),
+            ("",             120),
         ]):
             ctk.CTkLabel(
                 headers_frame, text=text,
@@ -284,7 +291,7 @@ class TransactionsPage(ctk.CTkFrame):
         if not txs:
             ctk.CTkLabel(
                 self.rows_frame,
-                text="No transactions found.",
+                text=t("no_transactions_found"),
                 font=ctk.CTkFont(size=14),
                 text_color=TEXT_MUTED,
             ).grid(row=0, column=0, columnspan=6, pady=48)
@@ -301,7 +308,7 @@ class TransactionsPage(ctk.CTkFrame):
         f.grid_propagate(False)
 
         icon = tx.category.icon if tx.category else "💳"
-        name = tx.category.name if tx.category else "Uncategorized"
+        name = tx.category.name if tx.category else t("uncategorized")
 
         ctk.CTkLabel(f, text=icon, font=ctk.CTkFont(size=18), width=40
                      ).grid(row=0, column=0, padx=(16, 4), pady=14)
@@ -337,14 +344,14 @@ class TransactionsPage(ctk.CTkFrame):
             action_frame, text="✏️", width=32, height=28,
             corner_radius=6, fg_color="transparent",
             hover_color=HOVER_BLUE, text_color=("#2563EB", "#3B82F6"),
-            command=lambda t=tx: self._open_edit_dialog(t),
+            command=lambda tx=tx: self._open_edit_dialog(tx),
         ).grid(row=0, column=0, padx=(0, 4))
 
         ctk.CTkButton(
             action_frame, text="🗑", width=32, height=28,
             corner_radius=6, fg_color="transparent",
             hover_color=HOVER_RED, text_color="#DC2626",
-            command=lambda t=tx: self._delete(t),
+            command=lambda tx=tx: self._delete(tx),
         ).grid(row=0, column=1)
 
     def _export_csv(self):
@@ -368,32 +375,25 @@ class TransactionsPage(ctk.CTkFrame):
 
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(["Date", "Type", "Category", "Amount", "Note"])
+            writer.writerow([t("date"), t("category"), t("amount"), t("note")])
             for tx in txs:
                 writer.writerow([
                     format_date(tx.date),
-                    tx.type,
-                    tx.category.name if tx.category else "Uncategorized",
+                    tx.category.name if tx.category else t("uncategorized"),
                     tx.amount_cents / 100,
                     tx.note,
                 ])
 
         messagebox.showinfo(
-            "Export complete",
-            f"Saved {len(txs)} transactions to:\n{filepath}"
+            t("export_complete"),
+            t("saved_to", len(txs), filepath),
         )
 
     def _export_pdf(self):
-        from tkinter import filedialog, messagebox
-        from datetime import date
         from services.pdf_service import generate_monthly_report
-
-        today = date.today()
-        month_names = [
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        ]
-        default_name = f"BudgetWise_{month_names[today.month - 1]}_{today.year}.pdf"
+        today        = date.today()
+        month_name   = months_list()[today.month - 1]
+        default_name = f"BudgetWise_{month_name}_{today.year}.pdf"
 
         filepath = filedialog.asksaveasfilename(
             defaultextension=".pdf",
@@ -405,7 +405,7 @@ class TransactionsPage(ctk.CTkFrame):
             return
 
         generate_monthly_report(self.user, today.year, today.month, filepath)
-        messagebox.showinfo("Export complete", f"Report saved to:\n{filepath}")
+        messagebox.showinfo(t("export_complete"), f"Report saved to:\n{filepath}")
 
     def _open_add_dialog(self):
         AddTransactionDialog(self, self.user, on_save=self._load_rows)
@@ -415,9 +415,9 @@ class TransactionsPage(ctk.CTkFrame):
 
     def _delete(self, tx):
         ok = messagebox.askyesno(
-            "Delete transaction",
-            f"Delete this transaction?\n"
-            f"{tx.category.name if tx.category else 'Uncategorized'} "
+            t("delete_transaction"),
+            f"{t('delete_confirm')}\n"
+            f"{tx.category.name if tx.category else t('uncategorized')} "
             f"— {format_money_short(tx.amount_cents)}",
         )
         if ok:
@@ -434,7 +434,7 @@ class AddTransactionDialog(ctk.CTkToplevel):
         self.user    = user
         self.on_save = on_save
 
-        self.title("Add Transaction")
+        self.title(t("add_transaction_title"))
         self.geometry("420x600")
         self.resizable(False, False)
         self.grab_set()
@@ -449,13 +449,16 @@ class AddTransactionDialog(ctk.CTkToplevel):
         toggle.grid(row=0, column=0, padx=28, pady=(28, 0), sticky="ew")
         toggle.grid_columnconfigure((0, 1), weight=1)
 
-        for col, (label, val) in enumerate([("Expense", "expense"), ("Income", "income")]):
+        for col, (label, val) in enumerate([
+            (t("expense"), "expense"),
+            (t("income"),  "income"),
+        ]):
             ctk.CTkRadioButton(
                 toggle, text=label, variable=self.type_var, value=val,
                 font=ctk.CTkFont(size=14, weight="bold"),
             ).grid(row=0, column=col, padx=16, pady=12)
 
-        ctk.CTkLabel(self, text="Amount", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("amount_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=1, column=0, padx=28, pady=(20, 4), sticky="w")
         self.amount_entry = ctk.CTkEntry(
             self, placeholder_text="0.00",
@@ -465,7 +468,7 @@ class AddTransactionDialog(ctk.CTkToplevel):
         self.amount_entry.grid(row=2, column=0, **pad)
         self.amount_entry.focus()
 
-        ctk.CTkLabel(self, text="Category", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("category_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=3, column=0, padx=28, pady=(16, 4), sticky="w")
         categories = list(Category.select().where(
             (Category.user == self.user) | (Category.user.is_null())
@@ -479,7 +482,7 @@ class AddTransactionDialog(ctk.CTkToplevel):
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         ).grid(row=4, column=0, **pad)
 
-        ctk.CTkLabel(self, text="Date", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("date_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=5, column=0, padx=28, pady=(16, 4), sticky="w")
         self.date_entry = ctk.CTkEntry(
             self, placeholder_text="DD.MM.YYYY",
@@ -488,10 +491,10 @@ class AddTransactionDialog(ctk.CTkToplevel):
         self.date_entry.insert(0, date.today().strftime("%d.%m.%Y"))
         self.date_entry.grid(row=6, column=0, **pad)
 
-        ctk.CTkLabel(self, text="Note (optional)", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("note_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=7, column=0, padx=28, pady=(16, 4), sticky="w")
         self.note_entry = ctk.CTkEntry(
-            self, placeholder_text="e.g. Weekly groceries",
+            self, placeholder_text=t("note_placeholder"),
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         )
         self.note_entry.grid(row=8, column=0, **pad)
@@ -499,16 +502,15 @@ class AddTransactionDialog(ctk.CTkToplevel):
         self.recurring_var = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
             self,
-            text="🔄 Repeat monthly — auto-create every month",
+            text=t("recurring"),
             variable=self.recurring_var,
             font=ctk.CTkFont(size=13),
             text_color=TEXT_PRIMARY,
-            checkbox_width=20,
-            checkbox_height=20,
+            checkbox_width=20, checkbox_height=20,
         ).grid(row=9, column=0, padx=28, pady=(16, 0), sticky="w")
 
         ctk.CTkButton(
-            self, text="Save Transaction",
+            self, text=t("save_transaction"),
             height=48, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=15, weight="bold"),
@@ -521,13 +523,13 @@ class AddTransactionDialog(ctk.CTkToplevel):
         try:
             amount_cents = parse_money(self.amount_entry.get())
         except ValueError:
-            messagebox.showerror("Error", "Invalid amount. Enter a number like 150.50")
+            messagebox.showerror(t("error"), t("invalid_amount"))
             return
 
         try:
             tx_date = parse_date(self.date_entry.get())
         except ValueError:
-            messagebox.showerror("Error", "Invalid date. Use DD.MM.YYYY format")
+            messagebox.showerror(t("error"), t("invalid_date"))
             return
 
         category = self.cat_map.get(self.cat_var.get())
@@ -556,7 +558,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
         self.tx      = tx
         self.on_save = on_save
 
-        self.title("Edit Transaction")
+        self.title(t("edit_transaction_title"))
         self.geometry("420x520")
         self.resizable(False, False)
         self.grab_set()
@@ -571,13 +573,16 @@ class EditTransactionDialog(ctk.CTkToplevel):
         toggle.grid(row=0, column=0, padx=28, pady=(28, 0), sticky="ew")
         toggle.grid_columnconfigure((0, 1), weight=1)
 
-        for col, (label, val) in enumerate([("Expense", "expense"), ("Income", "income")]):
+        for col, (label, val) in enumerate([
+            (t("expense"), "expense"),
+            (t("income"),  "income"),
+        ]):
             ctk.CTkRadioButton(
                 toggle, text=label, variable=self.type_var, value=val,
                 font=ctk.CTkFont(size=14, weight="bold"),
             ).grid(row=0, column=col, padx=16, pady=12)
 
-        ctk.CTkLabel(self, text="Amount", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("amount_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=1, column=0, padx=28, pady=(20, 4), sticky="w")
         self.amount_entry = ctk.CTkEntry(
             self, font=ctk.CTkFont(size=22, weight="bold"),
@@ -587,7 +592,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
         self.amount_entry.grid(row=2, column=0, **pad)
         self.amount_entry.focus()
 
-        ctk.CTkLabel(self, text="Category", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("category_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=3, column=0, padx=28, pady=(16, 4), sticky="w")
         categories = list(Category.select().where(
             (Category.user == self.user) | (Category.user.is_null())
@@ -608,7 +613,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         ).grid(row=4, column=0, **pad)
 
-        ctk.CTkLabel(self, text="Date", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("date_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=5, column=0, padx=28, pady=(16, 4), sticky="w")
         self.date_entry = ctk.CTkEntry(
             self, font=ctk.CTkFont(size=14), height=40, corner_radius=8,
@@ -616,7 +621,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
         self.date_entry.insert(0, self.tx.date.strftime("%d.%m.%Y"))
         self.date_entry.grid(row=6, column=0, **pad)
 
-        ctk.CTkLabel(self, text="Note (optional)", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("note_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=7, column=0, padx=28, pady=(16, 4), sticky="w")
         self.note_entry = ctk.CTkEntry(
             self, font=ctk.CTkFont(size=14), height=40, corner_radius=8,
@@ -625,7 +630,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
         self.note_entry.grid(row=8, column=0, **pad)
 
         ctk.CTkButton(
-            self, text="Save Changes",
+            self, text=t("save_changes"),
             height=48, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=15, weight="bold"),
@@ -636,13 +641,13 @@ class EditTransactionDialog(ctk.CTkToplevel):
         try:
             amount_cents = parse_money(self.amount_entry.get())
         except ValueError:
-            messagebox.showerror("Error", "Invalid amount. Enter a number like 150.50")
+            messagebox.showerror(t("error"), t("invalid_amount"))
             return
 
         try:
             tx_date = parse_date(self.date_entry.get())
         except ValueError:
-            messagebox.showerror("Error", "Invalid date. Use DD.MM.YYYY format")
+            messagebox.showerror(t("error"), t("invalid_date"))
             return
 
         category = self.cat_map.get(self.cat_var.get())

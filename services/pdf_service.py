@@ -111,8 +111,10 @@ def generate_monthly_report(user, year: int, month: int, filepath: str):
     def S(name, **kw):
         return ParagraphStyle(name, **kw)
 
-    title_s   = S("T",  fontSize=22, fontName="Helvetica-Bold",  textColor=C_DARK,  spaceAfter=4)
-    sub_s     = S("S",  fontSize=12, fontName="Helvetica",        textColor=C_MUTED, spaceAfter=20)
+    title_s = S("T", fontSize=22, fontName="Helvetica-Bold",
+                textColor=C_DARK, spaceAfter=12)
+    sub_s = S("S", fontSize=12, fontName="Helvetica",
+              textColor=C_MUTED, spaceAfter=24)
     section_s = S("Se", fontSize=13, fontName="Helvetica-Bold",   textColor=C_DARK,  spaceBefore=16, spaceAfter=8)
     label_s   = S("L",  fontSize=10, fontName="Helvetica",        textColor=C_MUTED)
     footer_s  = S("F",  fontSize=9,  fontName="Helvetica",        textColor=C_MUTED, alignment=TA_CENTER)

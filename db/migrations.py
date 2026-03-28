@@ -85,6 +85,15 @@ def _apply_migrations():
     except Exception:
         pass
 
+        # v1.7.0 — add language to users table
+    try:
+        db.execute_sql(
+            "ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'en'"
+        )
+        logger.info("Migration: added language column")
+    except Exception:
+        pass
+
 
 def run():
     backup_db()

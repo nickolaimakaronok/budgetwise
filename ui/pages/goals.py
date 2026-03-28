@@ -11,6 +11,7 @@ from services.goal_service import (
     archive_goal, get_goal_progress
 )
 from utils.formatters import format_money_short, set_currency
+from utils.i18n import t
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,6 @@ TEXT_PRIMARY   = ("#1E293B", "#E2E8F0")
 TEXT_SECONDARY = ("#64748B", "#94A3B8")
 TEXT_MUTED     = ("#94A3B8", "#64748B")
 HOVER_RED      = ("#FEE2E2", "#3D1A1A")
-HOVER_BLUE     = ("#EFF6FF", "#1E3A5F")
 BTN_CONTRIBUTE = ("#EFF6FF", "#1E3A5F")
 BTN_CONTRIBUTE_HOVER = ("#DBEAFE", "#1A4A7A")
 
@@ -49,13 +49,13 @@ class GoalsPage(ctk.CTkFrame):
         header.grid_propagate(False)
 
         ctk.CTkLabel(
-            header, text="Goals",
+            header, text=t("goals"),
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=32, pady=20, sticky="w")
 
         ctk.CTkButton(
-            header, text="+ New Goal",
+            header, text=t("new_goal"),
             width=130, height=36, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=13, weight="bold"),
@@ -79,7 +79,7 @@ class GoalsPage(ctk.CTkFrame):
         if not goals:
             ctk.CTkLabel(
                 self.body,
-                text="No goals yet.\nClick '+ New Goal' to create one.",
+                text=t("no_goals"),
                 font=ctk.CTkFont(size=14),
                 text_color=TEXT_MUTED,
                 justify="center",
@@ -105,7 +105,6 @@ class GoalsPage(ctk.CTkFrame):
                   pady=(0, 16), sticky="ew")
         card.grid_columnconfigure(0, weight=1)
 
-        # Icon + name + archive button
         top = ctk.CTkFrame(card, fg_color="transparent")
         top.grid(row=0, column=0, padx=20, pady=(20, 8), sticky="ew")
         top.grid_columnconfigure(0, weight=1)
@@ -123,7 +122,6 @@ class GoalsPage(ctk.CTkFrame):
             command=lambda g=goal: self._archive(g),
         ).grid(row=0, column=1)
 
-        # Progress bar
         bar_bg = ctk.CTkFrame(card, fg_color=BG_BAR, corner_radius=4, height=10)
         bar_bg.grid(row=1, column=0, padx=20, pady=(0, 8), sticky="ew")
         bar_bg.grid_propagate(False)
@@ -134,7 +132,6 @@ class GoalsPage(ctk.CTkFrame):
                 bar_bg, fg_color=bar_color, corner_radius=4, height=10
             ).place(relx=0, rely=0, relwidth=min(pct, 1.0), relheight=1)
 
-        # Amount + percent
         ctk.CTkLabel(
             card,
             text=f"{format_money_short(goal.current_cents)} / "
@@ -143,15 +140,15 @@ class GoalsPage(ctk.CTkFrame):
             text_color=TEXT_SECONDARY,
         ).grid(row=2, column=0, padx=20, pady=(0, 4), sticky="w")
 
-        # Deadline info
         if deadline_info["has_deadline"] and not done:
             if deadline_info["is_overdue"]:
-                deadline_text  = f"⚠️ Overdue by {abs(deadline_info['days_left'])} days"
+                deadline_text  = t("overdue_by", abs(deadline_info["days_left"]))
                 deadline_color = "#DC2626"
             else:
-                deadline_text = (
-                    f"📅 {deadline_info['days_left']} days left  ·  "
-                    f"Save {format_money_short(deadline_info['needed_per_month'])}/month"
+                deadline_text = t(
+                    "days_left_save",
+                    deadline_info["days_left"],
+                    format_money_short(deadline_info["needed_per_month"]),
                 )
                 deadline_color = TEXT_SECONDARY
 
@@ -166,13 +163,13 @@ class GoalsPage(ctk.CTkFrame):
 
         if done:
             ctk.CTkLabel(
-                card, text="✅ Goal reached!",
+                card, text=t("goal_reached"),
                 font=ctk.CTkFont(size=13, weight="bold"),
                 text_color="#16A34A",
             ).grid(row=action_row, column=0, padx=20, pady=(0, 20), sticky="w")
         else:
             ctk.CTkButton(
-                card, text="+ Contribute",
+                card, text=t("contribute"),
                 height=34, corner_radius=8,
                 fg_color=BTN_CONTRIBUTE, hover_color=BTN_CONTRIBUTE_HOVER,
                 text_color=("#2563EB", "#3B82F6"),
@@ -187,7 +184,7 @@ class GoalsPage(ctk.CTkFrame):
         ContributeDialog(self, goal, on_save=self._load_goals)
 
     def _archive(self, goal):
-        ok = messagebox.askyesno("Archive goal", f"Archive '{goal.name}'?")
+        ok = messagebox.askyesno(t("archive_goal"), t("archive_confirm", goal.name))
         if ok:
             archive_goal(goal)
             logger.info(f"User archived goal: {goal.name}")
@@ -203,7 +200,7 @@ class AddGoalDialog(ctk.CTkToplevel):
         self.user    = user
         self.on_save = on_save
 
-        self.title("New Goal")
+        self.title(t("new_goal_title"))
         self.geometry("380x400")
         self.resizable(False, False)
         self.grab_set()
@@ -213,16 +210,16 @@ class AddGoalDialog(ctk.CTkToplevel):
     def _build(self):
         pad = {"padx": 28, "sticky": "ew"}
 
-        ctk.CTkLabel(self, text="Goal name", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("goal_name"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=0, column=0, padx=28, pady=(28, 4), sticky="w")
         self.name_entry = ctk.CTkEntry(
-            self, placeholder_text="e.g. Japan trip",
+            self, placeholder_text=t("goal_name_placeholder"),
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         )
         self.name_entry.grid(row=1, column=0, **pad)
         self.name_entry.focus()
 
-        ctk.CTkLabel(self, text="Target amount", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("target_amount"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=2, column=0, padx=28, pady=(16, 4), sticky="w")
         self.amount_entry = ctk.CTkEntry(
             self, placeholder_text="1000.00",
@@ -231,7 +228,7 @@ class AddGoalDialog(ctk.CTkToplevel):
         )
         self.amount_entry.grid(row=3, column=0, **pad)
 
-        ctk.CTkLabel(self, text="Deadline (optional)", font=ctk.CTkFont(size=13),
+        ctk.CTkLabel(self, text=t("deadline_optional"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=4, column=0, padx=28, pady=(16, 4), sticky="w")
         self.deadline_entry = ctk.CTkEntry(
             self, placeholder_text="DD.MM.YYYY",
@@ -240,7 +237,7 @@ class AddGoalDialog(ctk.CTkToplevel):
         self.deadline_entry.grid(row=5, column=0, padx=28, sticky="ew")
 
         ctk.CTkButton(
-            self, text="Create Goal",
+            self, text=t("create_goal"),
             height=48, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=15, weight="bold"),
@@ -251,12 +248,12 @@ class AddGoalDialog(ctk.CTkToplevel):
         from utils.formatters import parse_money, parse_date
         name = self.name_entry.get().strip()
         if not name:
-            messagebox.showerror("Error", "Please enter a goal name")
+            messagebox.showerror(t("error"), t("goal_name_required"))
             return
         try:
             target_cents = parse_money(self.amount_entry.get())
         except ValueError:
-            messagebox.showerror("Error", "Invalid amount")
+            messagebox.showerror(t("error"), t("invalid_amount_goal"))
             return
 
         deadline      = None
@@ -265,13 +262,13 @@ class AddGoalDialog(ctk.CTkToplevel):
             try:
                 deadline = parse_date(deadline_text)
             except ValueError:
-                messagebox.showerror("Error", "Invalid deadline. Use DD.MM.YYYY format")
+                messagebox.showerror(t("error"), t("invalid_deadline"))
                 return
 
         try:
             add_goal(self.user, name, target_cents, deadline=deadline)
         except ValueError as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror(t("error"), str(e))
             return
 
         self.on_save()
@@ -287,7 +284,7 @@ class ContributeDialog(ctk.CTkToplevel):
         self.goal    = goal
         self.on_save = on_save
 
-        self.title(f"Contribute to {goal.name}")
+        self.title(t("contribute_title", goal.name))
         self.geometry("340x240")
         self.resizable(False, False)
         self.grab_set()
@@ -311,7 +308,7 @@ class ContributeDialog(ctk.CTkToplevel):
         ).grid(row=1, column=0, padx=28, pady=(0, 16), sticky="w")
 
         self.amount_entry = ctk.CTkEntry(
-            self, placeholder_text="Amount to add",
+            self, placeholder_text=t("amount_to_add"),
             font=ctk.CTkFont(size=22, weight="bold"),
             height=52, corner_radius=8,
         )
@@ -319,7 +316,7 @@ class ContributeDialog(ctk.CTkToplevel):
         self.amount_entry.focus()
 
         ctk.CTkButton(
-            self, text="Contribute",
+            self, text=t("contribute_btn"),
             height=44, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=15, weight="bold"),
@@ -331,13 +328,13 @@ class ContributeDialog(ctk.CTkToplevel):
         try:
             amount_cents = parse_money(self.amount_entry.get())
         except ValueError:
-            messagebox.showerror("Error", "Invalid amount")
+            messagebox.showerror(t("error"), t("invalid_amount_goal"))
             return
 
         try:
             contribute_to_goal(self.goal, amount_cents)
         except ValueError as e:
-            messagebox.showerror("Error", str(e))
+            messagebox.showerror(t("error"), str(e))
             return
 
         self.on_save()

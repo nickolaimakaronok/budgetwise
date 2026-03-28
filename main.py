@@ -41,6 +41,9 @@ def main():
         user = User.create(name="Me", currency="USD")
         logger.info("Created default user")
 
+    from utils.i18n import set_language
+    set_language(user.language if user.language else "en")
+
     # 3. Auto-create recurring transactions for current month
     from services.transaction_service import create_recurring_for_month
     today = date.today()
