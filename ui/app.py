@@ -30,6 +30,10 @@ class App(ctk.CTk):
         self._build_nav_buttons()
         self.show_page("dashboard")
 
+        # ── Keyboard shortcuts ────────────────────────────────────────────
+        self.bind("<Command-n>", self._quick_add_transaction)
+        self.bind("<Command-N>", self._quick_add_transaction)
+
     # ── Sidebar ───────────────────────────────────────────────────────────────
 
     def _build_sidebar(self):
@@ -132,3 +136,17 @@ class App(ctk.CTk):
             return SettingsPage(self.main_area, self.user, self)
 
         return None
+
+    # ── Keyboard shortcuts ────────────────────────────────────────────────────
+
+    def _quick_add_transaction(self, event=None):
+        """
+        Cmd+N — opens Add Transaction dialog from any page.
+        After saving, navigates to Transactions page to show the new entry.
+        """
+        from ui.pages.transactions import AddTransactionDialog
+
+        def _on_save():
+            self.show_page("transactions")
+
+        AddTransactionDialog(self, self.user, on_save=_on_save)

@@ -85,7 +85,7 @@ def _apply_migrations():
     except Exception:
         pass
 
-        # v1.7.0 — add language to users table
+    # v1.7.0 — add language to users table
     try:
         db.execute_sql(
             "ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'en'"
@@ -93,6 +93,10 @@ def _apply_migrations():
         logger.info("Migration: added language column")
     except Exception:
         pass
+
+    # v1.8.0 — tags and transaction_tags tables
+    # Handled by create_tables(safe=True) above — no ALTER needed.
+    # The Tag and TransactionTag models are in ALL_MODELS.
 
 
 def run():

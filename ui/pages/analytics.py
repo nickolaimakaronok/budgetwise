@@ -1,6 +1,7 @@
 """
 ui/pages/analytics.py
-Analytics page — pie chart by category, bar chart by days, yearly overview.
+Analytics page — pie chart by category, bar chart by days, yearly overview,
+year statistics with best/worst month and month comparison table.
 """
 
 import customtkinter as ctk
@@ -117,6 +118,8 @@ class AnalyticsPage(ctk.CTkFrame):
         self._build_bar_chart(daily)
         self._build_category_table(categories)
         self._build_yearly_chart(self.scroll)
+        self._build_year_stats(self.scroll)
+        self._build_month_comparison(self.scroll)
 
     def _build_summary_cards(self, summary):
         row = ctk.CTkFrame(self.scroll, fg_color="transparent")
@@ -241,12 +244,18 @@ class AnalyticsPage(ctk.CTkFrame):
             font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, columnspan=3, padx=24, pady=(20, 12), sticky="w")
 
+        # Fixed column widths for consistent alignment
+        def _configure_row(frame):
+            frame.grid_columnconfigure(0, minsize=160)
+            frame.grid_columnconfigure(1, weight=1)
+            frame.grid_columnconfigure(2, minsize=180)
+
         for i, c in enumerate(categories):
             bg = BG_ROW_EVEN if i % 2 == 0 else BG_ROW_ODD
 
             row_f = ctk.CTkFrame(card, fg_color=bg, corner_radius=0)
             row_f.grid(row=i + 1, column=0, columnspan=3, padx=0, pady=0, sticky="ew")
-            row_f.grid_columnconfigure(1, weight=1)
+            _configure_row(row_f)
 
             ctk.CTkLabel(
                 row_f,
@@ -268,8 +277,8 @@ class AnalyticsPage(ctk.CTkFrame):
                 row_f,
                 text=f"{format_money_short(c['spent_cents'])}  ·  {c['percent']}%",
                 font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT_PRIMARY,
-                width=160,
-            ).grid(row=0, column=2, padx=24, pady=12, sticky="e")
+                width=160, anchor="e",
+            ).grid(row=0, column=2, padx=(0, 24), pady=12, sticky="e")
 
     def _build_yearly_chart(self, parent):
         from services.analytics_service import get_yearly_totals
@@ -289,7 +298,7 @@ class AnalyticsPage(ctk.CTkFrame):
         spine_c = _chart_spine()
 
         card = ctk.CTkFrame(parent, fg_color=BG_CARD, corner_radius=12)
-        card.grid(row=4, column=0, padx=32, pady=(0, 32), sticky="ew")
+        card.grid(row=4, column=0, padx=32, pady=(0, 16), sticky="ew")
 
         ctk.CTkLabel(
             card, text=t("year_overview", self.year),
@@ -325,3 +334,268 @@ class AnalyticsPage(ctk.CTkFrame):
         canvas.draw()
         canvas.get_tk_widget().grid(row=1, column=0, padx=24, pady=(0, 20), sticky="ew")
         plt.close(fig)
+
+    # ── v1.8.0 — Year statistics cards ────────────────────────────────────────
+
+    def _build_year_stats(self, parent):
+        from services.analytics_service import get_year_statistics
+
+        stats = get_year_statistics(self.user, self.year)
+        self._year_stats = stats  # save for month comparison table
+
+        if stats["active_months"] == 0:
+            return
+
+        ml = months_list()
+
+        card = ctk.CTkFrame(parent, fg_color=BG_CARD, corner_radius=12)
+        card.grid(row=5, column=0, padx=32, pady=(0, 16), sticky="ew")
+        card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            card, text=t("year_stats", self.year),
+            font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT_PRIMARY,
+        ).grid(row=0, column=0, padx=24, pady=(20, 16), sticky="w")
+
+        # ── Top row: 3 cards (total income, total expense, savings rate) ──
+        top_row = ctk.CTkFrame(card, fg_color="transparent")
+        top_row.grid(row=1, column=0, padx=24, pady=(0, 12), sticky="ew")
+        top_row.grid_columnconfigure((0, 1, 2), weight=1)
+
+        top_cards = [
+            (t("total_income_year"),  format_money_short(stats["total_income"]),  "#16A34A"),
+            (t("total_expense_year"), format_money_short(stats["total_expense"]), "#DC2626"),
+            (t("savings_rate"),       f"{stats['savings_rate']}%",                "#2563EB"),
+        ]
+        for i, (label, value, color) in enumerate(top_cards):
+            mini = ctk.CTkFrame(top_row, fg_color=BG_ROW_ODD, corner_radius=8)
+            mini.grid(row=0, column=i, padx=(0 if i == 0 else 8, 0), sticky="ew")
+
+            ctk.CTkLabel(
+                mini, text=label,
+                font=ctk.CTkFont(size=11), text_color=TEXT_SECONDARY,
+            ).grid(row=0, column=0, padx=16, pady=(12, 2), sticky="w")
+
+            ctk.CTkLabel(
+                mini, text=value,
+                font=ctk.CTkFont(size=18, weight="bold"), text_color=color,
+            ).grid(row=1, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        # ── Bottom row: 4 cards (best month, worst month, highest income, highest expense) ──
+        bot_row = ctk.CTkFrame(card, fg_color="transparent")
+        bot_row.grid(row=2, column=0, padx=24, pady=(0, 20), sticky="ew")
+        bot_row.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        best_m  = stats["best_month"]
+        worst_m = stats["worst_month"]
+        hi_inc  = stats["highest_income"]
+        hi_exp  = stats["highest_expense"]
+
+        def _month_name(m: int) -> str:
+            return ml[m - 1] if 1 <= m <= 12 else "—"
+
+        bot_cards = [
+            (
+                f"🏆 {t('best_month')}",
+                _month_name(best_m["month"]),
+                format_money_short(best_m["saved_cents"]),
+                "#16A34A",
+            ),
+            (
+                f"📉 {t('worst_month')}",
+                _month_name(worst_m["month"]),
+                format_money_short(worst_m["saved_cents"]),
+                "#DC2626",
+            ),
+            (
+                f"📥 {t('highest_income')}",
+                _month_name(hi_inc["month"]),
+                format_money_short(hi_inc["amount_cents"]),
+                "#16A34A",
+            ),
+            (
+                f"📤 {t('highest_expense')}",
+                _month_name(hi_exp["month"]),
+                format_money_short(hi_exp["amount_cents"]),
+                "#DC2626",
+            ),
+        ]
+
+        for i, (label, month_name, value, color) in enumerate(bot_cards):
+            mini = ctk.CTkFrame(bot_row, fg_color=BG_ROW_ODD, corner_radius=8)
+            mini.grid(row=0, column=i, padx=(0 if i == 0 else 8, 0), sticky="ew")
+
+            ctk.CTkLabel(
+                mini, text=label,
+                font=ctk.CTkFont(size=11), text_color=TEXT_SECONDARY,
+            ).grid(row=0, column=0, padx=12, pady=(10, 0), sticky="w")
+
+            ctk.CTkLabel(
+                mini, text=month_name,
+                font=ctk.CTkFont(size=14, weight="bold"), text_color=TEXT_PRIMARY,
+            ).grid(row=1, column=0, padx=12, pady=(2, 0), sticky="w")
+
+            ctk.CTkLabel(
+                mini, text=value,
+                font=ctk.CTkFont(size=12), text_color=color,
+            ).grid(row=2, column=0, padx=12, pady=(0, 10), sticky="w")
+
+    # ── v1.8.0 — Month comparison table ──────────────────────────────────────
+
+    def _build_month_comparison(self, parent):
+        stats = getattr(self, "_year_stats", None)
+        if stats is None or stats["active_months"] == 0:
+            return
+
+        ml = months_list()
+
+        card = ctk.CTkFrame(parent, fg_color=BG_CARD, corner_radius=12)
+        card.grid(row=6, column=0, padx=32, pady=(0, 32), sticky="ew")
+        card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            card, text=t("month_comparison"),
+            font=ctk.CTkFont(size=15, weight="bold"), text_color=TEXT_PRIMARY,
+        ).grid(row=0, column=0, padx=24, pady=(20, 12), sticky="w")
+
+        # Column widths for labels (fixed so all rows align)
+        W_MONTH  = 120
+        W_NUM    = 130
+        W_CHANGE = 110
+
+        # Fixed column widths for consistent alignment across all rows
+        def _configure_cols(frame):
+            frame.grid_columnconfigure(0, weight=0, minsize=W_MONTH)
+            frame.grid_columnconfigure(1, weight=1, minsize=W_NUM)
+            frame.grid_columnconfigure(2, weight=1, minsize=W_NUM)
+            frame.grid_columnconfigure(3, weight=1, minsize=W_NUM)
+            frame.grid_columnconfigure(4, weight=0, minsize=W_CHANGE)
+
+        # Table header
+        header_f = ctk.CTkFrame(card, fg_color=BG_BAR, corner_radius=0)
+        header_f.grid(row=1, column=0, padx=0, pady=0, sticky="ew")
+        _configure_cols(header_f)
+
+        headers = [
+            (t("month_col"),     W_MONTH),
+            (t("income"),        W_NUM),
+            (t("expenses"),      W_NUM),
+            (t("saved"),         W_NUM),
+            (t("change_vs_prev"),W_CHANGE),
+        ]
+        for i, (h, w) in enumerate(headers):
+            anchor = "w" if i == 0 else "e"
+            ctk.CTkLabel(
+                header_f, text=h,
+                font=ctk.CTkFont(size=12, weight="bold"), text_color=TEXT_SECONDARY,
+                width=w, anchor=anchor,
+            ).grid(row=0, column=i, padx=16, pady=10, sticky=anchor)
+
+        # Table rows
+        for idx, m in enumerate(stats["months"]):
+            if not m["has_data"]:
+                continue
+
+            bg = BG_ROW_EVEN if idx % 2 == 0 else BG_ROW_ODD
+
+            row_f = ctk.CTkFrame(card, fg_color=bg, corner_radius=0)
+            row_f.grid(row=idx + 2, column=0, padx=0, pady=0, sticky="ew")
+            _configure_cols(row_f)
+
+            # Month name
+            ctk.CTkLabel(
+                row_f, text=ml[m["month"] - 1],
+                font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT_PRIMARY,
+                width=W_MONTH, anchor="w",
+            ).grid(row=0, column=0, padx=16, pady=10, sticky="w")
+
+            # Income
+            ctk.CTkLabel(
+                row_f, text=format_money_short(m["income_cents"]),
+                font=ctk.CTkFont(size=13), text_color="#16A34A",
+                width=W_NUM, anchor="e",
+            ).grid(row=0, column=1, padx=16, pady=10, sticky="e")
+
+            # Expenses
+            ctk.CTkLabel(
+                row_f, text=format_money_short(m["expense_cents"]),
+                font=ctk.CTkFont(size=13), text_color="#DC2626",
+                width=W_NUM, anchor="e",
+            ).grid(row=0, column=2, padx=16, pady=10, sticky="e")
+
+            # Saved
+            saved = m["saved_cents"]
+            saved_color = "#16A34A" if saved >= 0 else "#DC2626"
+            ctk.CTkLabel(
+                row_f, text=format_money_short(saved),
+                font=ctk.CTkFont(size=13, weight="bold"), text_color=saved_color,
+                width=W_NUM, anchor="e",
+            ).grid(row=0, column=3, padx=16, pady=10, sticky="e")
+
+            # Change vs previous month (capped at ±999%)
+            change = m["expense_change"]
+            if change is None:
+                change_text  = "—"
+                change_color = TEXT_MUTED
+            elif change > 999:
+                change_text  = "▲ >999%"
+                change_color = "#DC2626"
+            elif change > 0:
+                change_text  = f"▲ +{change}%"
+                change_color = "#DC2626"
+            elif change < -999:
+                change_text  = "▼ <-999%"
+                change_color = "#16A34A"
+            elif change < 0:
+                change_text  = f"▼ {change}%"
+                change_color = "#16A34A"
+            else:
+                change_text  = "= 0%"
+                change_color = TEXT_SECONDARY
+
+            ctk.CTkLabel(
+                row_f, text=change_text,
+                font=ctk.CTkFont(size=12), text_color=change_color,
+                width=W_CHANGE, anchor="e",
+            ).grid(row=0, column=4, padx=16, pady=10, sticky="e")
+
+        # ── Average row ──
+        avg_f = ctk.CTkFrame(card, fg_color=BG_BAR, corner_radius=0)
+        avg_f.grid(row=99, column=0, padx=0, pady=0, sticky="ew")
+        _configure_cols(avg_f)
+
+        # Round averages to whole currency units for clean display
+        avg_income  = round(stats["avg_income"]  / 100) * 100
+        avg_expense = round(stats["avg_expense"] / 100) * 100
+        avg_saved   = avg_income - avg_expense
+
+        ctk.CTkLabel(
+            avg_f, text=t("average"),
+            font=ctk.CTkFont(size=13, weight="bold"), text_color=TEXT_PRIMARY,
+            width=W_MONTH, anchor="w",
+        ).grid(row=0, column=0, padx=16, pady=10, sticky="w")
+
+        ctk.CTkLabel(
+            avg_f, text=format_money_short(avg_income),
+            font=ctk.CTkFont(size=13, weight="bold"), text_color="#16A34A",
+            width=W_NUM, anchor="e",
+        ).grid(row=0, column=1, padx=16, pady=10, sticky="e")
+
+        ctk.CTkLabel(
+            avg_f, text=format_money_short(avg_expense),
+            font=ctk.CTkFont(size=13, weight="bold"), text_color="#DC2626",
+            width=W_NUM, anchor="e",
+        ).grid(row=0, column=2, padx=16, pady=10, sticky="e")
+
+        avg_saved_color = "#16A34A" if avg_saved >= 0 else "#DC2626"
+        ctk.CTkLabel(
+            avg_f, text=format_money_short(avg_saved),
+            font=ctk.CTkFont(size=13, weight="bold"), text_color=avg_saved_color,
+            width=W_NUM, anchor="e",
+        ).grid(row=0, column=3, padx=16, pady=10, sticky="e")
+
+        ctk.CTkLabel(
+            avg_f, text="",
+            font=ctk.CTkFont(size=12), text_color=TEXT_MUTED,
+            width=W_CHANGE, anchor="e",
+        ).grid(row=0, column=4, padx=16, pady=10, sticky="e")

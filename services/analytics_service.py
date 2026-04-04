@@ -236,3 +236,102 @@ def get_yearly_totals(user, year: int) -> list[dict]:
         }
         for m in monthly
     ]
+
+
+# ── v1.8.0 — Year statistics ─────────────────────────────────────────────────
+
+def get_year_statistics(user, year: int) -> dict:
+    """
+    Calculates comprehensive year statistics:
+    best/worst months, averages, savings rate, month-over-month changes.
+
+    Returns:
+        {
+            "total_income":       3200000,
+            "total_expense":      2100000,
+            "total_saved":        1100000,
+            "avg_income":          266666,
+            "avg_expense":         175000,
+            "savings_rate":          34.4,   # percent of income saved
+            "best_month":  {"month": 3, "saved_cents": 250000},
+            "worst_month": {"month": 7, "saved_cents": -30000},
+            "highest_income":  {"month": 12, "amount_cents": 500000},
+            "highest_expense": {"month": 1,  "amount_cents": 380000},
+            "months": [
+                {
+                    "month":          1,
+                    "income_cents":   300000,
+                    "expense_cents":  250000,
+                    "saved_cents":     50000,
+                    "expense_change":  None,    # None for January (no prev month)
+                    "has_data":        True,
+                },
+                ...
+            ],
+            "active_months": 9,   # months with at least one transaction
+        }
+    """
+    monthly = get_monthly_totals(user, year)
+
+    # Build enriched month data
+    months_data = []
+    for m in monthly:
+        inc = m["income_cents"]
+        exp = m["expense_cents"]
+        has_data = (inc + exp) > 0
+        months_data.append({
+            "month":          m["month"],
+            "income_cents":   inc,
+            "expense_cents":  exp,
+            "saved_cents":    inc - exp,
+            "expense_change": None,  # filled below
+            "has_data":       has_data,
+        })
+
+    # Calculate month-over-month expense change (percent)
+    for i in range(1, 12):
+        prev_exp = months_data[i - 1]["expense_cents"]
+        curr_exp = months_data[i]["expense_cents"]
+        if prev_exp > 0 and months_data[i]["has_data"]:
+            change = round((curr_exp - prev_exp) / prev_exp * 100, 1)
+            months_data[i]["expense_change"] = change
+
+    # Filter months with data
+    active = [m for m in months_data if m["has_data"]]
+    active_count = len(active)
+
+    # Totals
+    total_income  = sum(m["income_cents"]  for m in months_data)
+    total_expense = sum(m["expense_cents"] for m in months_data)
+    total_saved   = total_income - total_expense
+
+    # Averages (over active months only)
+    avg_income  = total_income  // active_count if active_count > 0 else 0
+    avg_expense = total_expense // active_count if active_count > 0 else 0
+
+    # Savings rate
+    savings_rate = round(total_saved / total_income * 100, 1) if total_income > 0 else 0.0
+
+    # Best / worst month by savings (only among months with data)
+    if active:
+        best  = max(active, key=lambda m: m["saved_cents"])
+        worst = min(active, key=lambda m: m["saved_cents"])
+        hi_income  = max(active, key=lambda m: m["income_cents"])
+        hi_expense = max(active, key=lambda m: m["expense_cents"])
+    else:
+        best = worst = hi_income = hi_expense = {"month": 0, "saved_cents": 0, "income_cents": 0, "expense_cents": 0}
+
+    return {
+        "total_income":     total_income,
+        "total_expense":    total_expense,
+        "total_saved":      total_saved,
+        "avg_income":       avg_income,
+        "avg_expense":      avg_expense,
+        "savings_rate":     savings_rate,
+        "best_month":       {"month": best["month"],       "saved_cents":  best["saved_cents"]},
+        "worst_month":      {"month": worst["month"],      "saved_cents":  worst["saved_cents"]},
+        "highest_income":   {"month": hi_income["month"],  "amount_cents": hi_income["income_cents"]},
+        "highest_expense":  {"month": hi_expense["month"], "amount_cents": hi_expense["expense_cents"]},
+        "months":           months_data,
+        "active_months":    active_count,
+    }

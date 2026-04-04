@@ -94,4 +94,28 @@ class Goal(BaseModel):
         table_name = "goals"
 
 
-ALL_MODELS = [User, Category, Transaction, Budget, Goal]
+# ── v1.8.0 — Tags ────────────────────────────────────────────────────────────
+
+class Tag(BaseModel):
+    """A user-defined tag for transactions (e.g. #vacation, #work)."""
+    id   = AutoField()
+    user = ForeignKeyField(User, backref="tags", on_delete="CASCADE")
+    name = TextField()  # stored without '#', e.g. "vacation"
+
+    class Meta:
+        table_name = "tags"
+        indexes = ((("user", "name"), True),)  # unique per user
+
+
+class TransactionTag(BaseModel):
+    """Many-to-many junction: transaction ↔ tag."""
+    id          = AutoField()
+    transaction = ForeignKeyField(Transaction, backref="transaction_tags", on_delete="CASCADE")
+    tag         = ForeignKeyField(Tag, backref="transaction_tags", on_delete="CASCADE")
+
+    class Meta:
+        table_name = "transaction_tags"
+        indexes = ((("transaction", "tag"), True),)
+
+
+ALL_MODELS = [User, Category, Transaction, Budget, Goal, Tag, TransactionTag]
