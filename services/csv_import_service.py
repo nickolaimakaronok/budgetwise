@@ -28,6 +28,12 @@ DATE_FORMATS = [
     ("%d.%m.%y",   "DD.MM.YY"),
 ]
 
+# How to read the sign of the amount column (chosen in the import dialog)
+SIGN_SIGNED      = "signed"    # "-45.50" → expense, "45.50" → income
+SIGN_ALL_EXPENSE = "expense"   # every row is an expense, sign ignored
+SIGN_ALL_INCOME  = "income"    # every row is income, sign ignored
+SIGN_MODES       = (SIGN_SIGNED, SIGN_ALL_EXPENSE, SIGN_ALL_INCOME)
+
 
 def read_csv_preview(filepath: str, max_rows: int = 5) -> dict:
     """
@@ -85,7 +91,8 @@ def parse_amount(text: str) -> tuple[int, str]:
       "1,234.50" → (123450, "income")
       "1.234,50" → (123450, "income")  # European format
     """
-    cleaned = text.strip().replace(" ", "")
+    # also accept the typographic minus "−" (U+2212) some exports use
+    cleaned = text.strip().replace(" ", "").replace("\u2212", "-")
 
     # Remove currency symbols
     for sym in ["$", "€", "£", "₽", "₪", "CHF", "USD", "EUR", "ILS", "RUB"]:
@@ -143,20 +150,25 @@ def parse_date_flexible(text: str, fmt: str) -> date:
     return datetime.strptime(cleaned, fmt).date()
 
 
-def find_category_by_name(user: User, name: str) -> Optional[Category]:
+def find_category_by_name(user: User, name: str, tx_type: Optional[str] = None) -> Optional[Category]:
     """
     Tries to find a matching category by name (case-insensitive).
     Searches both system and user categories.
+    With tx_type, only categories of that type can match — an expense
+    never lands in "Salary", an income never in "Groceries".
     """
     if not name or not name.strip():
         return None
 
     clean = name.strip().lower()
 
-    categories = list(Category.select().where(
+    query = Category.select().where(
         (Category.user == user) | (Category.user.is_null()),
         Category.is_archived == False,
-    ))
+    )
+    if tx_type:
+        query = query.where(Category.type == tx_type)
+    categories = list(query)
 
     for cat in categories:
         if cat.name.lower() == clean:
@@ -170,6 +182,30 @@ def find_category_by_name(user: User, name: str) -> Optional[Category]:
     return None
 
 
+def guess_sign_mode(rows: list[list[str]], amount_col: int) -> str:
+    """
+    Picks the default for the import dialog from the preview rows:
+    any negative amount → the file is signed (minus = expense);
+    no negatives at all → it's most likely a card statement that lists
+    spending as positive numbers → treat every row as an expense.
+    """
+    for row in rows:
+        if amount_col < len(row):
+            text = row[amount_col].strip()
+            if text.startswith(("-", "(", "\u2212")):
+                return SIGN_SIGNED
+    return SIGN_ALL_EXPENSE
+
+
+def resolve_type(detected_type: str, sign_mode: str) -> str:
+    """Final transaction type for one row, given the sign mode the user chose."""
+    if sign_mode == SIGN_ALL_EXPENSE:
+        return "expense"
+    if sign_mode == SIGN_ALL_INCOME:
+        return "income"
+    return detected_type        # SIGN_SIGNED: minus → expense, otherwise income
+
+
 def import_transactions(
     user: User,
     filepath: str,
@@ -177,7 +213,7 @@ def import_transactions(
     amount_col: int,
     note_col: Optional[int],
     date_format: str,
-    default_type: str = "expense",
+    sign_mode: str = SIGN_SIGNED,
     skip_header: bool = True,
 ) -> dict:
     """
@@ -190,7 +226,10 @@ def import_transactions(
         amount_col:   Column index for amount
         note_col:     Column index for description/note (None = skip)
         date_format:  strftime format string (e.g. "%d.%m.%Y")
-        default_type: "expense" or "income" — used when amount has no sign
+        sign_mode:    how to read the amount column:
+                SIGN_SIGNED      — "-45.50" expense, "45.50" income
+                SIGN_ALL_EXPENSE — every row is an expense
+                SIGN_ALL_INCOME  — every row is income
         skip_header:  Skip first row
 
     Returns:
@@ -200,6 +239,8 @@ def import_transactions(
             "errors":   ["Row 15: invalid date '32.13.2025'", ...],
         }
     """
+    if sign_mode not in SIGN_MODES:
+        raise ValueError(f"Unknown sign_mode: {sign_mode!r}")
     preview = read_csv_preview(filepath, max_rows=0)
     encoding = preview["encoding"]
     delimiter = preview["delimiter"]
@@ -239,16 +280,15 @@ def import_transactions(
                     skipped += 1
                     continue
 
-                # Use detected sign if present, otherwise default
-                tx_type = detected_type
+                tx_type = resolve_type(detected_type, sign_mode)
 
                 # Parse note/description
                 note = ""
                 if note_col is not None and note_col < len(row):
                     note = row[note_col].strip()
 
-                # Try to auto-match category from note
-                category = find_category_by_name(user, note)
+                # Try to auto-match category from note (same type only)
+                category = find_category_by_name(user, note, tx_type)
 
                 add_transaction(
                     user=user,

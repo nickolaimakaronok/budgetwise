@@ -843,7 +843,7 @@ class ImportCSVDialog(ctk.CTkToplevel):
         self.preview = None
 
         self.title(t("import_csv_title"))
-        self.geometry("620x580")
+        self.geometry("620x690")
         self.resizable(False, False)
         self.grab_set()
         self.grid_columnconfigure(0, weight=1)
@@ -892,7 +892,8 @@ class ImportCSVDialog(ctk.CTkToplevel):
 
         try:
             from services.csv_import_service import read_csv_preview
-            self.preview = read_csv_preview(filepath, max_rows=5)
+            # 50 rows: enough to guess the amount sign; only 4 are shown
+            self.preview = read_csv_preview(filepath, max_rows=50)
         except Exception as e:
             messagebox.showerror(t("error"), str(e))
             return
@@ -948,6 +949,7 @@ class ImportCSVDialog(ctk.CTkToplevel):
         ctk.CTkOptionMenu(
             mapping, values=col_options, variable=self.amount_col_var,
             font=ctk.CTkFont(size=12), height=32, corner_radius=6,
+            command=lambda _value: self._guess_sign_mode(),  # re-guess for the new column
         ).grid(row=2, column=1, padx=16, pady=4, sticky="ew")
 
         # Note/description column
@@ -955,7 +957,8 @@ class ImportCSVDialog(ctk.CTkToplevel):
                      font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,
                      ).grid(row=3, column=0, padx=16, pady=4, sticky="w")
         note_options = [t("skip_column")] + col_options
-        note_default = note_options[min(2, len(note_options) - 1)]
+        # note_options[0] is "skip", so CSV column 2 sits at index 3
+        note_default = note_options[3] if len(col_options) >= 3 else note_options[0]
         self.note_col_var = ctk.StringVar(value=note_default)
         ctk.CTkOptionMenu(
             mapping, values=note_options, variable=self.note_col_var,
@@ -965,14 +968,32 @@ class ImportCSVDialog(ctk.CTkToplevel):
         # Date format
         ctk.CTkLabel(mapping, text=t("date_format"),
                      font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,
-                     ).grid(row=4, column=0, padx=16, pady=(4, 12), sticky="w")
-        from services.csv_import_service import DATE_FORMATS
+                     ).grid(row=4, column=0, padx=16, pady=4, sticky="w")
+        from services.csv_import_service import (
+            DATE_FORMATS, SIGN_SIGNED, SIGN_ALL_EXPENSE, SIGN_ALL_INCOME,
+        )
         fmt_options = [label for _, label in DATE_FORMATS]
         self.date_fmt_var = ctk.StringVar(value=fmt_options[0])
         ctk.CTkOptionMenu(
             mapping, values=fmt_options, variable=self.date_fmt_var,
             font=ctk.CTkFont(size=12), height=32, corner_radius=6,
-        ).grid(row=4, column=1, padx=16, pady=(4, 12), sticky="ew")
+        ).grid(row=4, column=1, padx=16, pady=4, sticky="ew")
+
+        # Amount sign — many banks list spending as positive numbers
+        ctk.CTkLabel(mapping, text=t("amount_sign"),
+                     font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,
+                     ).grid(row=5, column=0, padx=16, pady=(4, 12), sticky="w")
+        self.sign_options = {
+            t("sign_signed"): SIGN_SIGNED,
+            t("sign_all_expense"): SIGN_ALL_EXPENSE,
+            t("sign_all_income"): SIGN_ALL_INCOME,
+        }
+        self.sign_var = ctk.StringVar()
+        ctk.CTkOptionMenu(
+            mapping, values=list(self.sign_options.keys()), variable=self.sign_var,
+            font=ctk.CTkFont(size=12), height=32, corner_radius=6,
+        ).grid(row=5, column=1, padx=16, pady=(4, 12), sticky="ew")
+        self._guess_sign_mode()
 
         # ── Preview table ─────────────────────────────────────────────────
         ctk.CTkLabel(
@@ -1028,11 +1049,21 @@ class ImportCSVDialog(ctk.CTkToplevel):
             command=self._do_import,
         ).grid(row=0, column=1, sticky="ew")
 
+    def _guess_sign_mode(self):
+        """Pre-selects the sign option from the preview rows of the chosen amount column."""
+        from services.csv_import_service import guess_sign_mode
+        amount_col = int(self.amount_col_var.get().split(":")[0])
+        mode = guess_sign_mode(self.preview["rows"], amount_col)
+        for label, value in self.sign_options.items():
+            if value == mode:
+                self.sign_var.set(label)
+                break
+
     def _do_import(self):
         from services.csv_import_service import import_transactions, DATE_FORMATS
 
         # Parse column indices from dropdown values ("0: Date" → 0)
-        date_col   = int(self.date_col_var.get().split(":")[0])
+        date_col = int(self.date_col_var.get().split(":")[0])
         amount_col = int(self.amount_col_var.get().split(":")[0])
 
         note_val = self.note_col_var.get()
@@ -1056,6 +1087,7 @@ class ImportCSVDialog(ctk.CTkToplevel):
                 amount_col=amount_col,
                 note_col=note_col,
                 date_format=date_format,
+                sign_mode=self.sign_options[self.sign_var.get()],
             )
         except Exception as e:
             messagebox.showerror(t("error"), str(e))

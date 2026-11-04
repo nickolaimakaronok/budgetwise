@@ -69,6 +69,10 @@ TRANSLATIONS = {
         "import_btn":           "🚀 Import {} transactions",
         "import_complete":      "Import complete",
         "import_result":        "Imported: {}\nSkipped: {}\nErrors: {}",
+        "amount_sign":          "Amounts in file",
+        "sign_signed":          "Minus = expense, plus = income",
+        "sign_all_expense":     "All rows are expenses",
+        "sign_all_income":      "All rows are income",
 
         # ── Add / Edit Transaction Dialog ─────────────────────────────────────
         "add_transaction_title":  "Add Transaction",
@@ -283,6 +287,10 @@ TRANSLATIONS = {
         "import_btn":           "🚀 Импортировать {} транзакций",
         "import_complete":      "Импорт завершён",
         "import_result":        "Импортировано: {}\nПропущено: {}\nОшибок: {}",
+        "amount_sign":          "Суммы в файле",
+        "sign_signed":          "Минус — расход, плюс — доход",
+        "sign_all_expense":     "Все строки — расходы",
+        "sign_all_income":      "Все строки — доходы",
 
         # ── Add / Edit Transaction Dialog ─────────────────────────────────────
         "add_transaction_title":  "Добавить транзакцию",
@@ -497,6 +505,10 @@ TRANSLATIONS = {
         "import_btn":           "🚀 {} Transaktionen importieren",
         "import_complete":      "Import abgeschlossen",
         "import_result":        "Importiert: {}\nÜbersprungen: {}\nFehler: {}",
+        "amount_sign":          "Beträge in der Datei",
+        "sign_signed":          "Minus = Ausgabe, Plus = Einnahme",
+        "sign_all_expense":     "Alle Zeilen sind Ausgaben",
+        "sign_all_income":      "Alle Zeilen sind Einnahmen",
 
         # ── Add / Edit Transaction Dialog ─────────────────────────────────────
         "add_transaction_title":  "Transaktion hinzufügen",
