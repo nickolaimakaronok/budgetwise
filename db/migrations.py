@@ -4,10 +4,8 @@ Creates tables on first run and seeds default system categories.
 Run once via: python -m db.migrations
 """
 
-import shutil
-import os
-from datetime import datetime
 from db.database import db
+from db.backup import create_auto_backup
 from models.models import ALL_MODELS, Category
 import logging
 logger = logging.getLogger(__name__)
@@ -40,15 +38,9 @@ SYSTEM_CATEGORIES = [
 
 
 def backup_db():
-    """Creates a backup of the database before migration (if the file already exists)."""
+    """Backs up the DB before migrations: includes WAL data, keeps the last 10 auto backups."""
     from db.database import DB_PATH
-    if os.path.exists(DB_PATH):
-        backup_dir = os.path.join(os.path.dirname(DB_PATH), "backups")
-        os.makedirs(backup_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = os.path.join(backup_dir, f"budget_backup_{timestamp}.db")
-        shutil.copy2(DB_PATH, backup_path)
-        logger.info(f"💾 Backup saved: {backup_path}")
+    create_auto_backup(DB_PATH)
 
 
 def create_tables():

@@ -4,11 +4,10 @@ Settings page — currency, appearance, language, categories, backup.
 """
 
 import customtkinter as ctk
-import shutil
 import os
-from datetime import datetime
 from tkinter import messagebox
 from db.database import db, DB_PATH
+from db.backup import create_backup
 from models.models import Category, User
 from utils.formatters import set_currency
 from utils.i18n import t, set_language, get_language
@@ -300,12 +299,13 @@ class SettingsPage(ctk.CTkFrame):
         ).grid(row=3, column=0, padx=24, pady=(0, 24), sticky="ew")
 
     def _backup(self):
-        backup_dir  = os.path.join(os.path.dirname(DB_PATH), "backups")
-        os.makedirs(backup_dir, exist_ok=True)
-        timestamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = os.path.join(backup_dir, f"budget_backup_{timestamp}.db")
-        shutil.copy2(DB_PATH, backup_path)
-        messagebox.showinfo("Backup", t("backup_saved").format(backup_path))
+        # SQLite backup API — includes data still sitting in the WAL file
+        try:
+            backup_path = create_backup(DB_PATH)
+        except Exception as e:
+            messagebox.showerror(t("error"), str(e))
+            return
+        messagebox.showinfo(t("backup_db"), t("backup_saved").format(backup_path))
 
     def _open_backup_folder(self):
         backup_dir = os.path.join(os.path.dirname(DB_PATH), "backups")
