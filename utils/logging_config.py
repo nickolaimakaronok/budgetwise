@@ -14,8 +14,10 @@ import logging
 import os
 from datetime import datetime
 
+from utils.platform_utils import app_data_dir
+
 # Log file location — same folder as the database
-LOG_DIR  = os.path.expanduser("~/Documents/BudgetWise")
+LOG_DIR  = app_data_dir()
 LOG_FILE = os.path.join(LOG_DIR, "budgetwise.log")
 
 

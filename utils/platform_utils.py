@@ -21,6 +21,35 @@ def is_mac() -> bool:
 def is_windows() -> bool:
     return sys.platform.startswith("win")
 
+APP_FOLDER   = "BudgetWise"
+DATA_DIR_ENV = "BUDGETWISE_DATA_DIR"
+
+
+def app_data_dir() -> str:
+    """
+    Folder for the database, backups and log — the place each OS keeps
+    app data in (not synced to iCloud/OneDrive, no permission prompts):
+      macOS:   ~/Library/Application Support/BudgetWise
+      Windows: BudgetWise in %LOCALAPPDATA% (C:/Users/<name>/AppData/Local)
+      Linux:   ~/.local/share/BudgetWise (or $XDG_DATA_HOME/BudgetWise)
+    The BUDGETWISE_DATA_DIR environment variable overrides it (tests use this).
+    """
+    custom = os.environ.get(DATA_DIR_ENV)
+    if custom:
+        return os.path.abspath(os.path.expanduser(custom))
+    home = os.path.expanduser("~")
+    if is_mac():
+        base = os.path.join(home, "Library", "Application Support")
+    elif is_windows():
+        base = os.environ.get("LOCALAPPDATA") or os.path.join(home, "AppData", "Local")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    return os.path.join(base, APP_FOLDER)
+
+
+def legacy_data_dir() -> str:
+    """Where versions up to 1.8 kept their data."""
+    return os.path.join(os.path.expanduser("~"), "Documents", APP_FOLDER)
 
 def shortcut_modifier() -> str:
     """Tk name of the shortcut key: Command (⌘) on macOS, Control elsewhere."""

@@ -16,7 +16,7 @@ import sys
 import logging
 from datetime import date
 
-from utils.logging_config import setup_logging
+from utils.logging_config import setup_logging, LOG_FILE
 
 setup_logging(debug=False)
 logger = logging.getLogger(__name__)
@@ -65,9 +65,25 @@ def _get_or_create_user() -> User | None:
     return user
 
 
+def _show_startup_error(error: Exception) -> None:
+    """The .app has no terminal — without this window a failed start shows nothing at all."""
+    from tkinter import Tk, messagebox
+    root = Tk()
+    root.withdraw()
+    messagebox.showerror(
+        "BudgetWise",
+        f"BudgetWise could not open its data:\n\n{error}\n\nDetails: {LOG_FILE}",
+    )
+    root.destroy()
+
 def main():
-    # 1. Run migrations (creates tables + seeds categories)
-    run_migrations()
+    # 1. Move data from ~/Documents if needed, run migrations (creates tables + seeds categories)
+    try:
+        run_migrations()
+    except Exception as e:
+        logger.exception("Could not prepare the database")
+        _show_startup_error(e)
+        sys.exit(1)
 
     # 2. Get or create user (may show onboarding)
     user = _get_or_create_user()

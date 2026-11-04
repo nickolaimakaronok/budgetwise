@@ -4,9 +4,14 @@ Creates tables on first run and seeds default system categories.
 Run once via: python -m db.migrations
 """
 
+import os
 from datetime import date
 from db.database import db
 from db.backup import create_auto_backup
+from db.data_move import move_legacy_data
+from utils.platform_utils import DATA_DIR_ENV, app_data_dir, legacy_data_dir
+
+
 from models.models import ALL_MODELS, Category, Transaction
 import logging
 logger = logging.getLogger(__name__)
@@ -38,11 +43,26 @@ SYSTEM_CATEGORIES = [
 ]
 
 
+def move_old_data_folder():
+    """
+    Versions up to 1.8 kept the data in ~/Documents/BudgetWise — move it once
+    to the app data folder (see db/data_move.py).
+    Only into the standard folder: when BUDGETWISE_DATA_DIR is set, or the
+    database is pointed somewhere else (tests do that), ~/Documents is left alone.
+    """
+    if os.environ.get(DATA_DIR_ENV):
+        return
+    from db.database import DB_PATH
+    new_dir = os.path.dirname(DB_PATH)
+    if new_dir != app_data_dir():
+        return
+    move_legacy_data(legacy_data_dir(), new_dir)
+
+
 def backup_db():
     """Backs up the DB before migrations: includes WAL data, keeps the last 10 auto backups."""
     from db.database import DB_PATH
     create_auto_backup(DB_PATH)
-
 
 def create_tables():
     """Creates all tables (skips existing ones)."""
@@ -148,6 +168,7 @@ def _migrate_recurring_series() -> int:
 
 
 def run():
+    move_old_data_folder()          # FIRST — the backup and everything else use the new place
     backup_db()
     with db:
         _add_missing_columns()      # BEFORE create_tables — see docstring
