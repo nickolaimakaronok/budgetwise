@@ -128,7 +128,8 @@ class TransactionsPage(ctk.CTkFrame):
         search_row.grid(row=0, column=0, columnspan=9, padx=32, pady=(10, 0), sticky="ew")
         search_row.grid_columnconfigure(0, weight=1)
 
-        self.search_var.trace("w", lambda *args: self._on_search())
+        # trace_add works on Tk 8.6 AND Tk 9 — the old trace("w") was removed in Tk 9
+        self.search_var.trace_add("write", lambda *args: self._on_search())
 
         self.search_entry = ctk.CTkEntry(
             search_row,
