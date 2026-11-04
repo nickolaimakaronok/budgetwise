@@ -3,18 +3,18 @@ ui/pages/transactions.py
 Transactions page — full CRUD for transactions with filters, tags, and CSV export.
 """
 
-import csv
 import customtkinter as ctk
 from datetime import date
 from tkinter import messagebox, filedialog
 from services.transaction_service import (
-    get_transactions, filter_transactions, delete_transaction, update_transaction,
+    filter_transactions, delete_transaction, update_transaction,
     set_recurring, is_series_active, create_recurring_for_month,
 )
 from services.tag_service import (
     get_all_tags, get_transaction_tags, set_transaction_tags,
-    parse_tags_string, format_tags_display, format_tags_edit,
+    parse_tags_string, format_tags_edit,
 )
+from services.csv_export_service import export_transactions_csv
 from models.models import Category
 from utils.formatters import format_money_short, format_date, set_currency, parse_money, parse_date
 from utils.i18n import t, months_list
@@ -446,36 +446,23 @@ class TransactionsPage(ctk.CTkFrame):
             defaultextension=".csv",
             filetypes=[("CSV files", "*.csv")],
             initialfile="transactions.csv",
-            title="Export transactions to CSV",
+            title=t("export_csv_title"),
         )
         if not filepath:
             return
 
-        type_filter = None if self.filter_type == "all" else self.filter_type
-        txs = get_transactions(
-            self.user,
-            date_from=self.filter_date_from,
-            date_to=self.filter_date_to,
-            type=type_filter,
-            category=self.filter_category,
-        )
+        # Exactly what is on screen: all filters + search + tag, no row limit
+        txs = self._current_filtered()
 
-        with open(filepath, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow([t("date"), t("category"), t("amount"), t("note"), t("tags")])
-            for tx in txs:
-                tags = get_transaction_tags(tx)
-                writer.writerow([
-                    format_date(tx.date),
-                    tx.category.name if tx.category else t("uncategorized"),
-                    tx.amount_cents / 100,
-                    tx.note,
-                    format_tags_display(tags),
-                ])
+        try:
+            count = export_transactions_csv(txs, filepath)
+        except OSError as e:  # e.g. the file is open in Excel, or no write access
+            messagebox.showerror(t("error"), str(e))
+            return
 
         messagebox.showinfo(
             t("export_complete"),
-            t("saved_to", len(txs), filepath),
+            t("saved_to", count, filepath),
         )
 
     def _export_pdf(self):

@@ -50,6 +50,10 @@ TRANSLATIONS = {
         "export_complete":      "Export complete",
         "saved_to":             "Saved {} transactions to:\n{}",
         "uncategorized":        "Uncategorized",
+        "type":                 "Type",
+        "type_income":          "Income",
+        "type_expense":         "Expense",
+        "export_csv_title":     "Export transactions to CSV",
         "shown_of": "Showing {} of {}",
         "load_more": "Show {} more",
 
@@ -268,6 +272,10 @@ TRANSLATIONS = {
         "export_complete":      "Экспорт завершён",
         "saved_to":             "Сохранено {} транзакций:\n{}",
         "uncategorized":        "Без категории",
+        "type": "Тип",
+        "type_income": "Доход",
+        "type_expense": "Расход",
+        "export_csv_title": "Экспорт транзакций в CSV",
         "shown_of": "Показано {} из {}",
         "load_more": "Показать ещё {}",
 
@@ -486,6 +494,10 @@ TRANSLATIONS = {
         "export_complete":      "Export abgeschlossen",
         "saved_to":             "{} Transaktionen gespeichert:\n{}",
         "uncategorized":        "Ohne Kategorie",
+        "type": "Typ",
+        "type_income": "Einnahme",
+        "type_expense": "Ausgabe",
+        "export_csv_title": "Transaktionen als CSV exportieren",
         "shown_of":             "{} von {} angezeigt",
         "load_more":            "{} weitere anzeigen",
 
