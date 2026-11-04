@@ -181,7 +181,8 @@ TRANSLATIONS = {
         "test_notifications":   "🔔 Test Notifications",
         "backup_saved":         "Saved to:\n{}",
         "notifications_none":   "No budget limits exceeded or in warning zone.\nAdd budget limits and transactions to test.",
-        "notifications_sent": "Sent {} notification(s).\nCheck your macOS notification center.",
+        "notifications_sent": "Sent {} notification(s).\nCheck your system notifications.",
+        "open_folder_failed": "Could not open the folder automatically.\nIt is here:\n{}",
 
         # ── PDF Report ────────────────────────────────────────────────────────
         "pdf_title":            "BudgetWise — Monthly Report",
@@ -403,7 +404,8 @@ TRANSLATIONS = {
         "test_notifications":   "🔔 Проверить уведомления",
         "backup_saved":         "Сохранено:\n{}",
         "notifications_none":   "Лимиты бюджета не превышены.\nДобавьте лимиты и транзакции для проверки.",
-        "notifications_sent":   "Отправлено {} уведомлений.\nПроверьте центр уведомлений macOS.",
+        "notifications_sent": "Отправлено {} уведомлений.\nПроверьте системные уведомления.",
+        "open_folder_failed": "Не удалось открыть папку автоматически.\nОна находится здесь:\n{}",
 
         # ── PDF Report ────────────────────────────────────────────────────────
         "pdf_title":            "BudgetWise — Отчёт за месяц",
@@ -625,7 +627,8 @@ TRANSLATIONS = {
         "test_notifications":   "🔔 Benachrichtigungen testen",
         "backup_saved":         "Gespeichert:\n{}",
         "notifications_none":   "Keine Budgetlimits überschritten.\nFügen Sie Limits und Transaktionen hinzu.",
-        "notifications_sent":   "{} Benachrichtigung(en) gesendet.\nÜberprüfen Sie das macOS-Benachrichtigungscenter.",
+        "notifications_sent":   "{} Benachrichtigung(en) gesendet.\nÜberprüfen Sie die Systembenachrichtigungen.",
+        "open_folder_failed":   "Der Ordner konnte nicht automatisch geöffnet werden.\nEr befindet sich hier:\n{}",
 
         # ── PDF Report ────────────────────────────────────────────────────────
         "pdf_title":            "BudgetWise — Monatsbericht",

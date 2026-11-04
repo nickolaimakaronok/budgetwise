@@ -7,9 +7,10 @@ import customtkinter as ctk
 import os
 from tkinter import messagebox
 from db.database import db, DB_PATH
-from db.backup import create_backup
+from db.backup import create_backup, default_backup_dir
 from models.models import Category, User
 from utils.formatters import set_currency
+from utils.platform_utils import open_path
 from utils.i18n import t, set_language, get_language
 
 # ── Theme colors — (light, dark) tuples ──────────────────────────────────────
@@ -308,9 +309,10 @@ class SettingsPage(ctk.CTkFrame):
         messagebox.showinfo(t("backup_db"), t("backup_saved").format(backup_path))
 
     def _open_backup_folder(self):
-        backup_dir = os.path.join(os.path.dirname(DB_PATH), "backups")
+        backup_dir = default_backup_dir(DB_PATH)
         os.makedirs(backup_dir, exist_ok=True)
-        os.system(f"open '{backup_dir}'")
+        if not open_path(backup_dir):
+            messagebox.showinfo(t("backup_db"), t("open_folder_failed").format(backup_dir))
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

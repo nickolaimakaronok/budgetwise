@@ -7,6 +7,7 @@ import customtkinter as ctk
 from utils.constants import (
     APP_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, SIDEBAR_WIDTH, NAV_ITEMS, COLOR
 )
+from utils.platform_utils import shortcut_modifier
 from utils.i18n import t
 
 
@@ -31,8 +32,10 @@ class App(ctk.CTk):
         self.show_page("dashboard")
 
         # ── Keyboard shortcuts ────────────────────────────────────────────
-        self.bind("<Command-n>", self._quick_add_transaction)
-        self.bind("<Command-N>", self._quick_add_transaction)
+        # Cmd+N on macOS, Ctrl+N on Windows/Linux ("N" = with Shift/Caps Lock)
+        mod = shortcut_modifier()
+        self.bind(f"<{mod}-n>", self._quick_add_transaction)
+        self.bind(f"<{mod}-N>", self._quick_add_transaction)
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
 
@@ -141,7 +144,7 @@ class App(ctk.CTk):
 
     def _quick_add_transaction(self, event=None):
         """
-        Cmd+N — opens Add Transaction dialog from any page.
+        Cmd+N (Ctrl+N on Windows/Linux) — opens Add Transaction dialog from any page.
         After saving, navigates to Transactions page to show the new entry.
         """
         from ui.pages.transactions import AddTransactionDialog
