@@ -44,3 +44,35 @@ def open_path(path: str) -> bool:
     except OSError as e:
         logger.warning(f"Could not open {path}: {e}")
         return False
+
+
+
+
+def show_notification(title: str, message: str) -> bool:
+    """
+    Shows a system notification. Returns True if the system accepted it.
+      macOS:   osascript — built into every Mac, needs no extra packages
+               (plyer needs pyobjus there and an API deprecated since macOS 11)
+      Windows: plyer → notification balloon / toast
+      Linux:   plyer → D-Bus or notify-send
+    """
+    try:
+        if is_mac():
+            # title/message go in as separate arguments (argv), not glued into
+            # the script text, so quotes in a category name can't break it
+            subprocess.run(
+                ["osascript",
+                 "-e", "on run argv",
+                 "-e", "display notification (item 2 of argv) with title (item 1 of argv)",
+                 "-e", "end run",
+                 title, message],
+                check=True, capture_output=True, timeout=10,
+            )
+        else:
+            from plyer import notification
+            notification.notify(title=title, message=message,
+                                app_name="BudgetWise", timeout=8)
+        return True
+    except Exception as e:
+        logger.warning(f"Could not show notification: {e}")
+        return False

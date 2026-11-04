@@ -183,6 +183,8 @@ TRANSLATIONS = {
         "notifications_none":   "No budget limits exceeded or in warning zone.\nAdd budget limits and transactions to test.",
         "notifications_sent": "Sent {} notification(s).\nCheck your system notifications.",
         "open_folder_failed": "Could not open the folder automatically.\nIt is here:\n{}",
+        "notifications_failed": "Could not show notifications on this computer.\nDetails are in budgetwise.log in the BudgetWise folder.",
+        "notifications_hint_mac": "Nothing appeared? Allow notifications for “Script Editor” in System Settings → Notifications.",
 
         # ── PDF Report ────────────────────────────────────────────────────────
         "pdf_title":            "BudgetWise — Monthly Report",
@@ -406,6 +408,8 @@ TRANSLATIONS = {
         "notifications_none":   "Лимиты бюджета не превышены.\nДобавьте лимиты и транзакции для проверки.",
         "notifications_sent": "Отправлено {} уведомлений.\nПроверьте системные уведомления.",
         "open_folder_failed": "Не удалось открыть папку автоматически.\nОна находится здесь:\n{}",
+        "notifications_failed": "Не удалось показать уведомления на этом компьютере.\nПодробности — в файле budgetwise.log в папке BudgetWise.",
+        "notifications_hint_mac": "Ничего не появилось? Разрешите уведомления для «Редактор скриптов» в Системных настройках → Уведомления.",
 
         # ── PDF Report ────────────────────────────────────────────────────────
         "pdf_title":            "BudgetWise — Отчёт за месяц",
@@ -629,6 +633,8 @@ TRANSLATIONS = {
         "notifications_none":   "Keine Budgetlimits überschritten.\nFügen Sie Limits und Transaktionen hinzu.",
         "notifications_sent":   "{} Benachrichtigung(en) gesendet.\nÜberprüfen Sie die Systembenachrichtigungen.",
         "open_folder_failed":   "Der Ordner konnte nicht automatisch geöffnet werden.\nEr befindet sich hier:\n{}",
+        "notifications_failed": "Benachrichtigungen konnten auf diesem Computer nicht angezeigt werden.\nDetails stehen in budgetwise.log im BudgetWise-Ordner.",
+        "notifications_hint_mac": "Nichts erschienen? Erlauben Sie Mitteilungen für „Skripteditor“ in Systemeinstellungen → Mitteilungen.",
 
         # ── PDF Report ────────────────────────────────────────────────────────
         "pdf_title":            "BudgetWise — Monatsbericht",

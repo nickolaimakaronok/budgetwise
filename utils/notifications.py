@@ -1,7 +1,8 @@
 """
 utils/notifications.py
 Background notification service — checks budget limits every hour
-and sends a macOS system notification when a category exceeds its limit.
+and sends a system notification (macOS, Windows, Linux) when a category
+exceeds its limit.
 
 How it works:
   1. main.py calls start_notification_worker(user) on app startup
@@ -16,7 +17,8 @@ How it works:
 import threading
 import time
 from datetime import date
-from plyer import notification
+
+from utils.platform_utils import show_notification
 
 import logging
 logger = logging.getLogger(__name__)
@@ -26,10 +28,13 @@ logger = logging.getLogger(__name__)
 # 3600 = 1 hour. Set to 60 for testing.
 CHECK_INTERVAL_SECONDS = 3600
 
-# Tracks which categories have already been notified this session.
+# Tracks which categories have already been notified this month.
 # Key: category_id, Value: status that was notified ("warning" or "danger")
 # Prevents sending the same notification every hour for the same category.
 _notified: dict[int, str] = {}
+
+# (year, month) that _notified belongs to — a new month starts with a clean slate
+_notified_month: tuple[int, int] | None = None
 
 # Controls whether the worker loop keeps running.
 # Set to False to stop the background thread gracefully.
@@ -95,7 +100,16 @@ def _worker(user) -> None:
             time.sleep(1)
 
 
-def _check_and_notify(user) -> None:
+def _reset_if_new_month(today: date) -> None:
+    """New month = new budgets, so last month's notifications are forgotten."""
+    global _notified_month
+    month = (today.year, today.month)
+    if _notified_month != month:
+        _notified.clear()
+        _notified_month = month
+
+
+def _check_and_notify(user, today: date | None = None) -> None:
     """
     Fetches the current month's budget status and sends notifications
     for any category that is in "warning" (≥80%) or "danger" (≥100%) status.
@@ -104,11 +118,13 @@ def _check_and_notify(user) -> None:
       - "danger"  (≥100%): "🚨 Budget exceeded — Category: 120% used"
       - "warning" (≥80%):  "⚠️ Budget warning — Category: 85% used"
       - Already notified at the same or higher level → skip (no spam)
+      - A notification the system refused is retried at the next check
       - Resets notification memory each month (new month = fresh start)
     """
     from services.budget_service import get_budget_status
 
-    today = date.today()
+    today = today or date.today()
+    _reset_if_new_month(today)
     rows  = get_budget_status(user, today.year, today.month)
 
     for row in rows:
@@ -133,16 +149,16 @@ def _check_and_notify(user) -> None:
         if _notified.get(cat.id) == "danger" and status == "warning":
             continue
 
-        # Send the notification
-        _send_notification(cat.name, status, pct, row)
+        # Remember the category only if the notification was really shown,
+        # so a failed one is tried again at the next check
+        if _send_notification(cat.name, status, pct, row):
+            _notified[cat.id] = status
 
-        # Remember that we notified this category at this status level
-        _notified[cat.id] = status
 
-
-def _send_notification(cat_name: str, status: str, pct: float, row: dict) -> None:
+def _send_notification(cat_name: str, status: str, pct: float, row: dict) -> bool:
     """
-    Sends a macOS system notification via plyer.
+    Builds the text and shows a system notification.
+    Returns True if the system accepted it.
 
     Args:
         cat_name: Category name e.g. "Groceries"
@@ -168,45 +184,34 @@ def _send_notification(cat_name: str, status: str, pct: float, row: dict) -> Non
             f"{pct:.0f}% used — approaching limit."
         )
 
-    try:
-        notification.notify(
-            title=title,
-            message=message,
-            app_name="BudgetWise",
-            timeout=8,   # notification disappears after 8 seconds
-        )
+    if show_notification(title, message):
         logger.info(f"Notification sent: {title}")
-    except Exception as e:
-        # plyer may fail silently on some macOS configurations — just log it
-        logger.warning(f"Could not send notification: {e}")
+        return True
+    return False
 
 
-def check_now(user) -> int:
+def check_now(user) -> tuple[int, int]:
     """
-    Manually triggers a budget check right now.
-    Returns the number of notifications sent.
-    Useful for testing from the Settings page.
+    Manually triggers a budget check right now (Settings → Test Notifications).
+    Returns (found, sent):
+        found — categories in warning/danger status this month
+        sent  — notifications the system actually accepted
 
     Usage:
         from utils.notifications import check_now
-        sent = check_now(user)
-        print(f"Sent {sent} notifications")
+        found, sent = check_now(user)
     """
     from services.budget_service import get_budget_status
-    from utils.formatters import format_money_short
 
     today = date.today()
     rows  = get_budget_status(user, today.year, today.month)
+    found = 0
     sent  = 0
 
     for row in rows:
         if row["status"] in ("warning", "danger"):
-            _send_notification(
-                row["category"].name,
-                row["status"],
-                row["percent"],
-                row,
-            )
-            sent += 1
+            found += 1
+            if _send_notification(row["category"].name, row["status"], row["percent"], row):
+                sent += 1
 
-    return sent
+    return found, sent

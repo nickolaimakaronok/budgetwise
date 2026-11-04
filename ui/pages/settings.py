@@ -10,7 +10,7 @@ from db.database import db, DB_PATH
 from db.backup import create_backup, default_backup_dir
 from models.models import Category, User
 from utils.formatters import set_currency
-from utils.platform_utils import open_path
+from utils.platform_utils import open_path, is_mac
 from utils.i18n import t, set_language, get_language
 
 # ── Theme colors — (light, dark) tuples ──────────────────────────────────────
@@ -336,8 +336,13 @@ class SettingsPage(ctk.CTkFrame):
 
     def _test_notifications(self):
         from utils.notifications import check_now
-        sent = check_now(self.user)
-        if sent == 0:
+        found, sent = check_now(self.user)
+        if found == 0:
             messagebox.showinfo("Notifications", t("notifications_none"))
+        elif sent == 0:
+            messagebox.showwarning("Notifications", t("notifications_failed"))
         else:
-            messagebox.showinfo("Notifications", t("notifications_sent").format(sent))
+            text = t("notifications_sent").format(sent)
+            if is_mac():
+                text += "\n\n" + t("notifications_hint_mac")
+            messagebox.showinfo("Notifications", text)
