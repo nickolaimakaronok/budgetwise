@@ -7,7 +7,10 @@ import csv
 import customtkinter as ctk
 from datetime import date
 from tkinter import messagebox, filedialog
-from services.transaction_service import get_transactions, delete_transaction, update_transaction
+from services.transaction_service import (
+    get_transactions, delete_transaction, update_transaction,
+    set_recurring, is_series_active, create_recurring_for_month,
+)
 from services.tag_service import (
     get_all_tags, get_transaction_tags, set_transaction_tags,
     parse_tags_string, format_tags_display, format_tags_edit,
@@ -383,7 +386,7 @@ class TransactionsPage(ctk.CTkFrame):
                      ).grid(row=0, column=2, padx=8)
 
         note_text = tx.note[:28] + "…" if len(tx.note) > 28 else tx.note
-        if tx.is_recurring:
+        if tx.is_recurring_series:  # template OR copy of a series
             note_text = f"🔄 {note_text}"
 
         ctk.CTkLabel(f, text=note_text,
@@ -635,6 +638,13 @@ class AddTransactionDialog(ctk.CTkToplevel):
         if tag_names:
             set_transaction_tags(tx, self.user, tag_names)
 
+        # Recurring transaction dated in an earlier month (e.g. rent since
+        # August): create the copies up to this month right away,
+        # instead of waiting for the next app launch.
+        if tx.is_recurring:
+            today = date.today()
+            create_recurring_for_month(self.user, today.year, today.month)
+
         self.on_save()
         self.destroy()
 
@@ -650,7 +660,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
         self.on_save = on_save
 
         self.title(t("edit_transaction_title"))
-        self.geometry("420x580")
+        self.geometry("420x640")
         self.resizable(False, False)
         self.grab_set()
         self.grid_columnconfigure(0, weight=1)
@@ -732,13 +742,25 @@ class EditTransactionDialog(ctk.CTkToplevel):
             self.tags_entry.insert(0, format_tags_edit(existing_tags))
         self.tags_entry.grid(row=10, column=0, **pad)
 
+        # ── Repeat monthly — applies to the whole series (template or copy) ──
+        self.was_recurring = is_series_active(self.tx)
+        self.recurring_var = ctk.BooleanVar(value=self.was_recurring)
+        ctk.CTkCheckBox(
+            self,
+            text=t("recurring"),
+            variable=self.recurring_var,
+            font=ctk.CTkFont(size=13),
+            text_color=TEXT_PRIMARY,
+            checkbox_width=20, checkbox_height=20,
+        ).grid(row=11, column=0, padx=28, pady=(16, 0), sticky="w")
+
         ctk.CTkButton(
             self, text=t("save_changes"),
             height=48, corner_radius=8,
             fg_color="#2563EB", hover_color="#1D4ED8",
             font=ctk.CTkFont(size=15, weight="bold"),
             command=self._save,
-        ).grid(row=11, column=0, padx=28, pady=28, sticky="ew")
+        ).grid(row=12, column=0, padx=28, pady=28, sticky="ew")
 
     def _save(self):
         try:
@@ -767,6 +789,14 @@ class EditTransactionDialog(ctk.CTkToplevel):
         # Update tags
         tag_names = parse_tags_string(self.tags_entry.get())
         set_transaction_tags(self.tx, self.user, tag_names)
+
+        # Start / stop the monthly series — only if the checkbox was changed
+        wants_recurring = self.recurring_var.get()
+        if wants_recurring != self.was_recurring:
+            set_recurring(self.tx, wants_recurring)
+            if wants_recurring:
+                today = date.today()
+                create_recurring_for_month(self.user, today.year, today.month)
 
         self.on_save()
         self.destroy()
