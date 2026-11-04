@@ -85,6 +85,26 @@ def get_transaction_tags(transaction: Transaction) -> list[Tag]:
     )
 
 
+
+def get_tag_names_by_transaction(user) -> dict[int, list[str]]:
+    """
+    All of a user's tag assignments in ONE query.
+    Returns {transaction_id: ["tag1", "tag2", ...]} with names sorted.
+    Used by the Transactions page instead of one query per row.
+    """
+    result: dict[int, list[str]] = {}
+    rows = (
+        TransactionTag
+        .select(TransactionTag.transaction, Tag.name)
+        .join(Tag)
+        .where(Tag.user == user)
+        .order_by(Tag.name)
+        .tuples()
+    )
+    for tx_id, name in rows:
+        result.setdefault(tx_id, []).append(name)
+    return result
+
 def get_transactions_by_tag(user, tag_name: str) -> list[int]:
     """
     Returns transaction IDs that have a given tag.

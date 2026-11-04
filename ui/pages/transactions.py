@@ -8,7 +8,7 @@ import customtkinter as ctk
 from datetime import date
 from tkinter import messagebox, filedialog
 from services.transaction_service import (
-    get_transactions, delete_transaction, update_transaction,
+    get_transactions, filter_transactions, delete_transaction, update_transaction,
     set_recurring, is_series_active, create_recurring_for_month,
 )
 from services.tag_service import (
@@ -37,6 +37,9 @@ HOVER_RED      = ("#FEE2E2", "#3D1A1A")
 BTN_SECONDARY  = ("#F1F5F9", "#0F3460")
 BTN_SECONDARY_HOVER = ("#E2E8F0", "#1A4A7A")
 
+# Each row is ~10 real widgets, so the list draws this many at a time;
+# "Show more" adds the next batch. Filters and search always cover ALL rows.
+PAGE_SIZE = 200
 
 class TransactionsPage(ctk.CTkFrame):
 
@@ -53,6 +56,10 @@ class TransactionsPage(ctk.CTkFrame):
         self.filter_date_to   = None
         self.filter_tag       = None
         self.search_var       = ctk.StringVar()
+
+        self._all_txs: list   = []    # current filtered result — ALL matching rows
+        self._shown           = 0     # how many of them are drawn
+        self._more_btn        = None  # the "Show more" button, if any
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)
@@ -306,39 +313,28 @@ class TransactionsPage(ctk.CTkFrame):
 
         self._load_rows()
 
-    def _load_rows(self):
-        for widget in self.rows_frame.winfo_children():
-            widget.destroy()
-
+    def _current_filtered(self) -> list:
+        """All transactions matching the current filters + search (no row limit)."""
         type_filter = None if self.filter_type == "all" else self.filter_type
-
-        txs = get_transactions(
+        return filter_transactions(
             self.user,
             date_from=self.filter_date_from,
             date_to=self.filter_date_to,
             type=type_filter,
             category=self.filter_category,
+            tag=self.filter_tag,
+            search=self.search_entry.get(),
         )
 
-        # Tag filter
-        if self.filter_tag is not None:
-            from services.tag_service import get_transactions_by_tag
-            tag_tx_ids = set(get_transactions_by_tag(self.user, self.filter_tag.name))
-            txs = [tx for tx in txs if tx.id in tag_tx_ids]
+    def _load_rows(self):
+        for widget in self.rows_frame.winfo_children():
+            widget.destroy()
+        self._more_btn = None
 
-        # Search filter — also searches tags
-        search_text = self.search_entry.get().strip().lower()
-        if search_text:
-            filtered = []
-            for tx in txs:
-                cat_name = tx.category.name.lower() if tx.category else ""
-                note = tx.note.lower()
-                tags = format_tags_display(get_transaction_tags(tx)).lower()
-                if search_text in cat_name or search_text in note or search_text in tags:
-                    filtered.append(tx)
-            txs = filtered
+        self._all_txs = self._current_filtered()
+        self._shown = 0
 
-        if not txs:
+        if not self._all_txs:
             ctk.CTkLabel(
                 self.rows_frame,
                 text=t("no_transactions_found"),
@@ -347,9 +343,36 @@ class TransactionsPage(ctk.CTkFrame):
             ).grid(row=0, column=0, columnspan=6, pady=48)
             return
 
-        for i, tx in enumerate(txs):
+        self._show_more()
+
+    def _show_more(self):
+        """Draws the next PAGE_SIZE rows, plus a 'Show more' button if any remain."""
+        if self._more_btn is not None:
+            self._more_btn.destroy()
+            self._more_btn = None
+
+        start = self._shown
+        end = min(self._shown + PAGE_SIZE, len(self._all_txs))
+        for i in range(start, end):
             bg = BG_ROW_EVEN if i % 2 == 0 else BG_ROW_ODD
-            self._transaction_row(i, tx, bg)
+            self._transaction_row(i, self._all_txs[i], bg)
+        self._shown = end
+
+        remaining = len(self._all_txs) - self._shown
+        if remaining > 0:
+            self._more_btn = ctk.CTkButton(
+                self.rows_frame,
+                text=f"{t('shown_of', self._shown, len(self._all_txs))}  ·  "
+                     f"{t('load_more', min(PAGE_SIZE, remaining))}",
+                height=36, corner_radius=8,
+                fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER,
+                text_color=TEXT_PRIMARY,
+                font=ctk.CTkFont(size=13),
+                command=self._show_more,
+            )
+            self._more_btn.grid(row=self._shown, column=0, columnspan=6, pady=12)
+
+
 
     def _transaction_row(self, row_idx: int, tx, bg):
         f = ctk.CTkFrame(self.rows_frame, fg_color=bg, corner_radius=0, height=52)
@@ -363,11 +386,11 @@ class TransactionsPage(ctk.CTkFrame):
         ctk.CTkLabel(f, text=icon, font=ctk.CTkFont(size=18), width=40
                      ).grid(row=0, column=0, padx=(16, 4), pady=14)
 
-        # Category name + tags inline
-        tags = get_transaction_tags(tx)
+        # Category name + tags inline (tag_names preloaded by filter_transactions)
+        tag_names = getattr(tx, "tag_names", [])
         tag_str = ""
-        if tags:
-            tag_str = "  " + " ".join(f"#{tg.name}" for tg in tags[:3])
+        if tag_names:
+            tag_str = "  " + " ".join(f"#{name}" for name in tag_names[:3])
 
         cat_label = ctk.CTkFrame(f, fg_color="transparent")
         cat_label.grid(row=0, column=1, padx=8, sticky="w")

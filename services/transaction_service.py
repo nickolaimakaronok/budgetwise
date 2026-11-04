@@ -11,7 +11,7 @@ from typing import Optional
 
 import logging
 logger = logging.getLogger(__name__)
-from peewee import fn
+from peewee import JOIN, fn
 from models.models import Transaction, Category, User
 from db.database import db
 
@@ -71,10 +71,14 @@ def get_transactions(
     date_to: Optional[date_type] = None,
     type: Optional[str] = None,
     category: Optional[Category] = None,
-    limit: int = 200,
+    limit: Optional[int] = None,
 ) -> list[Transaction]:
     """
     Returns a filtered list of transactions, newest first.
+    No limit by default — callers that only need a few rows
+    (the dashboard) pass one explicitly.
+    The category is loaded in the same query (JOIN), so reading
+    tx.category costs no extra query per row.
 
     Usage:
         txs = get_transactions(user, date_from=date(2025,3,1))
@@ -82,10 +86,10 @@ def get_transactions(
     """
     query = (
         Transaction
-        .select()
+        .select(Transaction, Category)
+        .join(Category, JOIN.LEFT_OUTER)     # LEFT: keep rows without a category
         .where(Transaction.user == user)
-        .order_by(Transaction.date.desc(), Transaction.created_at.desc())
-        .limit(limit)
+        .order_by(Transaction.date.desc(), Transaction.created_at.desc(), Transaction.id.desc())
     )
 
     if date_from:
@@ -96,8 +100,55 @@ def get_transactions(
         query = query.where(Transaction.type == type)
     if category:
         query = query.where(Transaction.category == category)
+    if limit is not None:
+        query = query.limit(limit)
 
     return list(query)
+
+
+def filter_transactions(
+    user: User,
+    date_from: Optional[date_type] = None,
+    date_to: Optional[date_type] = None,
+    type: Optional[str] = None,
+    category: Optional[Category] = None,
+    tag=None,
+    search: str = "",
+) -> list[Transaction]:
+    """
+    Everything the Transactions page filters by, in one place:
+    date range, type, category, tag and the search box. No row limit.
+
+    Each returned transaction gets a `tag_names` attribute (list of str),
+    loaded for ALL rows with a single query — the page no longer asks
+    the database for tags row by row.
+
+    Search is case-insensitive (Cyrillic too) and matches the category
+    name, the note and the tag names; a leading "#" is ignored.
+    """
+    from services.tag_service import get_tag_names_by_transaction
+
+    txs = get_transactions(user, date_from, date_to, type, category)
+    tags_by_tx = get_tag_names_by_transaction(user)
+
+    if tag is not None:
+        txs = [tx for tx in txs if tag.name in tags_by_tx.get(tx.id, ())]
+
+    for tx in txs:
+        tx.tag_names = tags_by_tx.get(tx.id, [])
+
+    needle = search.strip().lower().lstrip("#")
+    if needle:
+        def matches(tx) -> bool:
+            cat_name = tx.category.name.lower() if tx.category else ""
+            return (
+                needle in cat_name
+                or needle in tx.note.lower()
+                or any(needle in name for name in tx.tag_names)
+            )
+        txs = [tx for tx in txs if matches(tx)]
+
+    return txs
 
 
 def get_recent_transactions(user: User, limit: int = 5) -> list[Transaction]:
@@ -190,6 +241,8 @@ def get_totals(
 ) -> dict:
     """
     Returns total income, total expenses, and net balance for a period.
+    Summed by the database itself (SUM ... GROUP BY type) —
+    counts every transaction, no row limit, nothing loaded into Python.
 
     Returns:
         {
@@ -198,17 +251,26 @@ def get_totals(
             "balance_cents":  70000,
         }
     """
-    txs = get_transactions(user, date_from=date_from, date_to=date_to)
+    query = (
+        Transaction
+        .select(Transaction.type, fn.SUM(Transaction.amount_cents).alias("total"))
+        .where(Transaction.user == user)
+        .group_by(Transaction.type)
+    )
+    if date_from:
+        query = query.where(Transaction.date >= date_from)
+    if date_to:
+        query = query.where(Transaction.date <= date_to)
 
-    income  = sum(t.amount_cents for t in txs if t.type == "income")
-    expense = sum(t.amount_cents for t in txs if t.type == "expense")
+    sums = {row.type: row.total or 0 for row in query}
+    income  = sums.get("income", 0)
+    expense = sums.get("expense", 0)
 
     return {
         "income_cents":  income,
         "expense_cents": expense,
         "balance_cents": income - expense,
     }
-
 
 
 def get_safe_date(original_date, year: int, month: int):

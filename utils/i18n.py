@@ -50,6 +50,8 @@ TRANSLATIONS = {
         "export_complete":      "Export complete",
         "saved_to":             "Saved {} transactions to:\n{}",
         "uncategorized":        "Uncategorized",
+        "shown_of": "Showing {} of {}",
+        "load_more": "Show {} more",
 
         # ── Import CSV ───────────────────────────────────────────────────────
         "import_csv":           "⬆ Import CSV",
@@ -262,6 +264,8 @@ TRANSLATIONS = {
         "export_complete":      "Экспорт завершён",
         "saved_to":             "Сохранено {} транзакций:\n{}",
         "uncategorized":        "Без категории",
+        "shown_of": "Показано {} из {}",
+        "load_more": "Показать ещё {}",
 
         # ── Import CSV ───────────────────────────────────────────────────────
         "import_csv":           "⬆ Импорт CSV",
@@ -474,6 +478,8 @@ TRANSLATIONS = {
         "export_complete":      "Export abgeschlossen",
         "saved_to":             "{} Transaktionen gespeichert:\n{}",
         "uncategorized":        "Ohne Kategorie",
+        "shown_of":             "{} von {} angezeigt",
+        "load_more":            "{} weitere anzeigen",
 
         # ── Import CSV ───────────────────────────────────────────────────────
         "import_csv":           "⬆ CSV importieren",
