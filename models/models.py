@@ -57,8 +57,24 @@ class Transaction(BaseModel):
     category     = ForeignKeyField(Category, backref="transactions", null=True, on_delete="SET NULL")
     date         = DateField(default=date.today)
     note         = TextField(default="")
-    created_at   = DateTimeField(default=datetime.now)
+    created_at = DateTimeField(default=datetime.now)
+
+    # ── Recurring transactions ────────────────────────────────────────────
+    # A recurring series = one TEMPLATE (is_recurring=True) + monthly COPIES.
+    #   template: is_recurring=True,  recurring_parent=None
+    #   copy:     is_recurring=False, recurring_parent=<template>
+    # recurring_last_month (template only) = 1st day of the last month a copy
+    # was generated for. Tracking it explicitly means a copy the user deletes
+    # is NOT re-created on the next launch, and missed months can be caught up.
     is_recurring = BooleanField(default=False)
+    recurring_parent = ForeignKeyField("self", backref="recurring_copies", null=True,
+                                       on_delete="SET NULL")
+    recurring_last_month = DateField(null=True)
+
+    @property
+    def is_recurring_series(self) -> bool:
+        """True for a template or any copy generated from one (used for the 🔄 marker)."""
+        return bool(self.is_recurring or self.recurring_parent_id)
 
     class Meta:
         table_name = "transactions"

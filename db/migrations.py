@@ -4,9 +4,10 @@ Creates tables on first run and seeds default system categories.
 Run once via: python -m db.migrations
 """
 
+from datetime import date
 from db.database import db
 from db.backup import create_auto_backup
-from models.models import ALL_MODELS, Category
+from models.models import ALL_MODELS, Category, Transaction
 import logging
 logger = logging.getLogger(__name__)
 
@@ -61,40 +62,98 @@ def seed_categories():
             logger.info(f"ℹ️  System categories already exist ({existing} found), skipping")
 
 
-def _apply_migrations():
+# Columns added after a table first shipped: (table, column, SQL type).
+# Each one is added only if the table exists and the column is missing.
+_NEW_COLUMNS = [
+    # v1.4.0
+    ("transactions", "is_recurring", "INTEGER DEFAULT 0"),
+    # v1.7.0
+    ("users", "language", "TEXT DEFAULT 'en'"),
+    # v1.9.0 — recurring series: copies point to their template
+    ("transactions", "recurring_parent_id",
+     "INTEGER REFERENCES transactions (id) ON DELETE SET NULL"),
+    ("transactions", "recurring_last_month", "DATE"),
+]
+# v1.8.0 — tags and transaction_tags are new TABLES,
+# so create_tables(safe=True) handles them — no ALTER needed.
+
+
+def _column_exists(table: str, column: str) -> bool:
+    return any(c.name == column for c in db.get_columns(table))
+
+
+def _add_missing_columns():
     """
-    Safely adds new columns to existing tables.
-    Each migration is wrapped in try/except — safe to run multiple times.
-    If column already exists — OperationalError is raised and caught silently.
+    Adds new columns to existing tables.
+
+    MUST run BEFORE create_tables(): for a new foreign-key column peewee also
+    runs CREATE INDEX IF NOT EXISTS on it. If the column doesn't exist yet,
+    SQLite treats the double-quoted name as a string literal and builds the
+    index on a constant; adding the column afterwards leaves that index
+    pointing at the wrong values ("database disk image is malformed").
     """
+    tables = set(db.get_tables())
+    for table, column, sql_type in _NEW_COLUMNS:
+        if table in tables and not _column_exists(table, column):
+            db.execute_sql(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
+            logger.info(f"Migration: added {table}.{column}")
 
-    # v1.4.0 — add is_recurring to transaction table
-    try:
-        db.execute_sql(
-            'ALTER TABLE transactions ADD COLUMN is_recurring INTEGER DEFAULT 0'
-        )
-        logger.info("Migration: added is_recurring column")
-    except Exception:
-        pass
 
-    # v1.7.0 — add language to users table
-    try:
-        db.execute_sql(
-            "ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'en'"
-        )
-        logger.info("Migration: added language column")
-    except Exception:
-        pass
+def _apply_data_migrations():
+    """One-time data migrations, tracked with SQLite's built-in user_version."""
+    version = db.execute_sql("PRAGMA user_version").fetchone()[0]
+    if version < 1:
+        with db.atomic():
+            fixed = _migrate_recurring_series()
+            db.execute_sql("PRAGMA user_version = 1")
+        logger.info(f"Migration v1: recurring series rebuilt ({fixed} copies linked)")
 
-    # v1.8.0 — tags and transaction_tags tables
-    # Handled by create_tables(safe=True) above — no ALTER needed.
-    # The Tag and TransactionTag models are in ALL_MODELS.
+
+def _first_of_month(d: date) -> date:
+    return date(d.year, d.month, 1)
+
+
+def _migrate_recurring_series() -> int:
+    """
+    Before v1.9.0 every auto-created copy was itself saved with
+    is_recurring=True, so each month added another "template".
+    Rebuild the series: rows the old code treated as the same transaction
+    (same user, type, category, amount, note) form one series —
+    the oldest stays the template, the rest become linked copies.
+    Returns the number of copies that were relinked.
+    """
+    rows = list(
+        Transaction.select()
+        .where(Transaction.is_recurring == True)
+        .order_by(Transaction.date, Transaction.id)
+    )
+
+    series: dict[tuple, list] = {}
+    for tx in rows:
+        key = (tx.user_id, tx.type, tx.category_id, tx.amount_cents, tx.note)
+        series.setdefault(key, []).append(tx)
+
+    relinked = 0
+    for txs in series.values():
+        template, copies = txs[0], txs[1:]
+        last = max(txs, key=lambda t: t.date).date
+        template.recurring_last_month = _first_of_month(last)
+        template.save()
+        for c in copies:
+            c.is_recurring     = False
+            c.recurring_parent = template
+            c.save()
+            relinked += 1
+    return relinked
 
 
 def run():
     backup_db()
+    with db:
+        _add_missing_columns()      # BEFORE create_tables — see docstring
     create_tables()
-    _apply_migrations()
+    with db:
+        _apply_data_migrations()
     seed_categories()
     logger.info("🚀 Database is ready")
 
