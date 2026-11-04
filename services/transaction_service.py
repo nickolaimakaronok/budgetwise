@@ -11,8 +11,19 @@ from typing import Optional
 
 import logging
 logger = logging.getLogger(__name__)
+from peewee import fn
 from models.models import Transaction, Category, User
 from db.database import db
+
+def _first_of_month(d: date_type) -> date_type:
+    """date(2026, 11, 23) → date(2026, 11, 1)"""
+    return date(d.year, d.month, 1)
+
+
+def _add_months(d: date_type, n: int) -> date_type:
+    """First day of the month n months after d's month: (2026-11-23, 2) → 2027-01-01."""
+    idx = d.year * 12 + (d.month - 1) + n
+    return date(idx // 12, idx % 12 + 1, 1)
 
 
 def add_transaction(
@@ -26,6 +37,8 @@ def add_transaction(
 ) -> Transaction:
     """
     Creates and saves a new transaction.
+    With is_recurring=True it becomes the TEMPLATE of a monthly series:
+    copies for the following months are made by create_recurring_for_month().
 
     Usage:
         tx = add_transaction(user, "expense", 50000, category=groceries_cat)
@@ -36,15 +49,18 @@ def add_transaction(
     if type not in ("income", "expense"):
         raise ValueError("Type must be 'income' or 'expense'")
 
+    tx_date = tx_date or date_type.today()
     with db:
         tx = Transaction.create(
             user=user,
             type=type,
             amount_cents=amount_cents,
             category=category,
-            date=tx_date or date_type.today(),
+            date=tx_date,
             note=note.strip(),
             is_recurring=is_recurring,
+            # the template itself already covers its own month
+            recurring_last_month=_first_of_month(tx_date) if is_recurring else None,
         )
     return tx
 
@@ -103,29 +119,67 @@ def update_transaction(
     Usage:
         update_transaction(tx, amount_cents=75000, note="Updated note")
     """
+    fields = []  # only the columns that were actually edited
     if amount_cents is not None:
         if amount_cents <= 0:
             raise ValueError("Amount must be greater than zero")
         tx.amount_cents = amount_cents
+        fields.append(Transaction.amount_cents)
     if category is not None:
         tx.category = category
+        fields.append(Transaction.category)
     if tx_date is not None:
         tx.date = tx_date
+        fields.append(Transaction.date)
     if note is not None:
         tx.note = note.strip()
+        fields.append(Transaction.note)
     if type is not None:
         if type not in ("income", "expense"):
             raise ValueError("Type must be 'income' or 'expense'")
         tx.type = type
+        fields.append(Transaction.type)
 
-    with db:
-        tx.save()
+    # Save ONLY the edited columns. The Edit dialog holds an object loaded
+    # earlier; a full save() would overwrite recurring_last_month (and the
+    # other recurring columns) with stale values written meanwhile.
+    if fields:
+        with db:
+            tx.save(only=fields)
     return tx
 
 
 def delete_transaction(tx: Transaction) -> None:
-    """Permanently deletes a transaction."""
+    """
+    Permanently deletes a transaction.
+    Deleting the TEMPLATE of a recurring series doesn't end the series:
+    its newest copy becomes the new template and the other copies move to it.
+    (To stop a series, use set_recurring(tx, False) instead.)
+    """
     with db:
+        # re-read from the DB: the caller's object may be older than the
+        # last create_recurring_for_month() run
+        fresh = Transaction.get_or_none(Transaction.id == tx.id)
+        if fresh is not None and fresh.is_recurring:
+            copies = list(
+                Transaction.select()
+                .where(Transaction.recurring_parent == fresh.id)
+                .order_by(Transaction.date.desc(), Transaction.id.desc())
+            )
+            if copies:
+                heir = copies[0]
+                last = max(
+                    fresh.recurring_last_month or _first_of_month(fresh.date),
+                    _first_of_month(heir.date),
+                )
+                (Transaction
+                 .update(is_recurring=True, recurring_parent=None, recurring_last_month=last)
+                 .where(Transaction.id == heir.id)
+                 .execute())
+                (Transaction
+                 .update(recurring_parent=heir.id)
+                 .where((Transaction.recurring_parent == fresh.id) & (Transaction.id != heir.id))
+                 .execute())
         tx.delete_instance()
 
 
@@ -190,7 +244,7 @@ def get_safe_date(original_date, year: int, month: int):
 
 
 def get_recurring_transactions(user) -> list:
-    """Returns all transactions marked as recurring."""
+    """Returns the TEMPLATES of all active recurring series."""
     return list(Transaction.select().where(
         Transaction.user         == user,
         Transaction.is_recurring == True,
@@ -199,48 +253,108 @@ def get_recurring_transactions(user) -> list:
 
 def create_recurring_for_month(user, year: int, month: int) -> int:
     """
-    Checks all recurring transactions and creates copies
-    for the given month if they don't exist yet.
-    Returns the number of transactions created.
+    Creates the missing monthly copies of every recurring series,
+    up to and including (year, month). Returns the number created.
 
     Called automatically on app startup from main.py.
-    Safe to call multiple times — won't create duplicates.
+    Each template remembers the last month it generated (recurring_last_month):
+      - nothing is duplicated, however often this runs;
+      - a copy the user deleted is NOT re-created;
+      - months the app wasn't opened in are caught up.
+    Dates always come from the TEMPLATE's date, so the day doesn't drift.
     """
-    recurring = get_recurring_transactions(user)
-    created   = 0
+    target  = date(year, month, 1)
+    created = 0
 
-    for tx in recurring:
-        # Calculate correct date for this month
-        target_date = get_safe_date(tx.date, year, month)
+    with db:
+        for tpl in get_recurring_transactions(user):
+            last = tpl.recurring_last_month or _first_of_month(tpl.date)
+            month_start = _add_months(last, 1)
+            if month_start > target:
+                continue                      # already up to date
 
-        # Check if this recurring transaction already exists this month
-        # Match by category + amount + note to identify duplicates
-        exists = Transaction.select().where(
-            Transaction.user         == user,
-            Transaction.category     == tx.category,
-            Transaction.amount_cents == tx.amount_cents,
-            Transaction.note         == tx.note,
-            Transaction.date.between(
-                date(year, month, 1),
-                date(year, month, calendar.monthrange(year, month)[1])
-            ),
-        ).exists()
-
-        if not exists:
-            with db:
+            while month_start <= target:
+                copy_date = get_safe_date(tpl.date, month_start.year, month_start.month)
                 Transaction.create(
-                    user         = user,
-                    type         = tx.type,
-                    amount_cents = tx.amount_cents,
-                    category     = tx.category,
-                    date         = target_date,
-                    note         = tx.note,
-                    is_recurring = True,  # copy is not recurring itself
+                    user             = user,
+                    type             = tpl.type,
+                    amount_cents     = tpl.amount_cents,
+                    category         = tpl.category_id,
+                    date             = copy_date,
+                    note             = tpl.note,
+                    is_recurring     = False,   # a copy is NOT a template
+                    recurring_parent = tpl,
                 )
-            created += 1
-            logger.info(
-                f"Auto-created recurring: '{tx.note}' "
-                f"{tx.amount_cents} cents → {target_date}"
-            )
+                created += 1
+                logger.info(
+                    f"Auto-created recurring: '{tpl.note}' "
+                    f"{tpl.amount_cents} cents → {copy_date}"
+                )
+                month_start = _add_months(month_start, 1)
+
+            # move the counter — update just this column
+            (Transaction
+             .update(recurring_last_month=target)
+             .where(Transaction.id == tpl.id)
+             .execute())
 
     return created
+
+
+def get_series_template(tx: Transaction):
+    """The template of the series tx belongs to (tx itself if it is one), or None."""
+    if tx.is_recurring:
+        return tx
+    if tx.recurring_parent_id:
+        return Transaction.get_or_none(Transaction.id == tx.recurring_parent_id)
+    return None
+
+
+def is_series_active(tx: Transaction) -> bool:
+    """True if tx is a template, or a copy whose template still repeats."""
+    template = get_series_template(tx)
+    return template is not None and template.is_recurring
+
+
+def set_recurring(tx: Transaction, enabled: bool, today=None) -> Transaction:
+    """
+    Turns monthly repetition on or off for the series tx belongs to.
+    Works on the template or on any of its copies. Returns the template.
+
+    Turning it back on continues from the current month —
+    months that passed while it was off are NOT back-filled.
+    """
+    today = today or date_type.today()
+
+    with db:
+        template = get_series_template(tx) or tx
+        template = Transaction.get_by_id(template.id)   # fresh from the DB
+
+        if not enabled:
+            changes = {"is_recurring": False}
+        elif not template.is_recurring:
+            latest = (
+                Transaction.select(fn.MAX(Transaction.date))
+                .where((Transaction.recurring_parent == template.id) | (Transaction.id == template.id))
+                .scalar()
+            ) or template.date
+            if isinstance(latest, str):
+                latest = date.fromisoformat(latest)
+            changes = {
+                "is_recurring": True,
+                "recurring_last_month": max(
+                    template.recurring_last_month or _first_of_month(template.date),
+                    _first_of_month(latest),
+                    _add_months(today, -1),
+                ),
+            }
+        else:
+            return template                    # already on — nothing to do
+
+        Transaction.update(**changes).where(Transaction.id == template.id).execute()
+        for field, value in changes.items():
+            setattr(template, field, value)
+            if tx.id == template.id:
+                setattr(tx, field, value)       # keep the caller's object in sync
+
+    return template
