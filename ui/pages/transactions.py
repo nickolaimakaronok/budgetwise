@@ -914,7 +914,10 @@ class ImportCSVDialog(ctk.CTkToplevel):
             text_color=TEXT_PRIMARY,
         ).grid(row=0, column=0, padx=28, pady=(28, 4), sticky="w")
 
-        info_text = t("import_file_info", self.preview["total_rows"])
+        from services.csv_import_service import ENCODING_LABELS
+        encoding = ENCODING_LABELS.get(self.preview["encoding"], self.preview["encoding"])
+        info_text = (f'{t("import_file_info", self.preview["total_rows"])}'
+                     f'  ·  {t("encoding")}: {encoding}')
         ctk.CTkLabel(
             self, text=info_text,
             font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,

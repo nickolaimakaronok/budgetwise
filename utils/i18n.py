@@ -59,6 +59,7 @@ TRANSLATIONS = {
         "import_csv_sub":       "Import transactions from a bank statement or other CSV file.",
         "choose_file":          "📂 Choose CSV file",
         "import_file_info":     "Found {} rows in file.",
+        "encoding":             "Encoding",
         "column_mapping":       "Column mapping",
         "date_column":          "Date column",
         "amount_column":        "Amount column",
@@ -176,8 +177,7 @@ TRANSLATIONS = {
         "test_notifications":   "🔔 Test Notifications",
         "backup_saved":         "Saved to:\n{}",
         "notifications_none":   "No budget limits exceeded or in warning zone.\nAdd budget limits and transactions to test.",
-        "notifications_sent":   "Sent {} notification(s).\nCheck your macOS notification center.",
-        "saved":                "Saved",
+        "notifications_sent": "Sent {} notification(s).\nCheck your macOS notification center.",
 
         # ── PDF Report ────────────────────────────────────────────────────────
         "pdf_title":            "BudgetWise — Monthly Report",
@@ -277,6 +277,7 @@ TRANSLATIONS = {
         "import_csv_sub":       "Загрузите транзакции из банковской выписки или CSV файла.",
         "choose_file":          "📂 Выбрать CSV файл",
         "import_file_info":     "Найдено {} строк в файле.",
+        "encoding":             "Кодировка",
         "column_mapping":       "Сопоставление колонок",
         "date_column":          "Колонка даты",
         "amount_column":        "Колонка суммы",
@@ -395,7 +396,6 @@ TRANSLATIONS = {
         "backup_saved":         "Сохранено:\n{}",
         "notifications_none":   "Лимиты бюджета не превышены.\nДобавьте лимиты и транзакции для проверки.",
         "notifications_sent":   "Отправлено {} уведомлений.\nПроверьте центр уведомлений macOS.",
-        "saved":                "Сохранено",
 
         # ── PDF Report ────────────────────────────────────────────────────────
         "pdf_title":            "BudgetWise — Отчёт за месяц",
@@ -495,6 +495,7 @@ TRANSLATIONS = {
         "import_csv_sub":       "Importieren Sie Transaktionen aus einem Kontoauszug oder einer CSV-Datei.",
         "choose_file":          "📂 CSV-Datei auswählen",
         "import_file_info":     "{} Zeilen in der Datei gefunden.",
+        "encoding":             "Kodierung",
         "column_mapping":       "Spaltenzuordnung",
         "date_column":          "Datumsspalte",
         "amount_column":        "Betragsspalte",
@@ -613,7 +614,6 @@ TRANSLATIONS = {
         "backup_saved":         "Gespeichert:\n{}",
         "notifications_none":   "Keine Budgetlimits überschritten.\nFügen Sie Limits und Transaktionen hinzu.",
         "notifications_sent":   "{} Benachrichtigung(en) gesendet.\nÜberprüfen Sie das macOS-Benachrichtigungscenter.",
-        "saved":                "Gespeichert",
 
         # ── PDF Report ────────────────────────────────────────────────────────
         "pdf_title":            "BudgetWise — Monatsbericht",

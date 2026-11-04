@@ -8,6 +8,7 @@ positive/negative amount conventions.
 """
 
 import csv
+import io
 import logging
 from datetime import datetime, date
 from typing import Optional
@@ -35,48 +36,110 @@ SIGN_ALL_INCOME  = "income"    # every row is income, sign ignored
 SIGN_MODES       = (SIGN_SIGNED, SIGN_ALL_EXPENSE, SIGN_ALL_INCOME)
 
 
+# Text encodings a bank CSV can come in → names shown in the import dialog
+ENCODING_LABELS = {
+    "utf-8-sig": "UTF-8",
+    "utf-16":    "UTF-16",
+    "cp1255":    "Windows-1255 (עברית)",
+    "cp1251":    "Windows-1251 (кириллица)",
+    "latin-1":   "Latin-1",
+}
+
+
+def _looks_hebrew(raw: bytes) -> bool:
+    """
+    The old Windows code pages for Hebrew (cp1255) and Cyrillic (cp1251) use
+    the same bytes, so a file decodes "without errors" both ways.
+    Telling them apart: Hebrew letters are bytes 0xE0–0xFA, which in cp1251
+    are only the lowercase letters а..ъ. Real Russian text practically always
+    also has capitals (Д, С …) or ы ь э ю я ё — bytes Hebrew text never has.
+    """
+    try:
+        as_hebrew = raw.decode("cp1255")
+    except UnicodeDecodeError:
+        return False                       # contains bytes that cp1255 doesn't have
+    if not any("\u05d0" <= ch <= "\u05ea" for ch in as_hebrew):
+        return False                       # no Hebrew letters at all
+    as_cyrillic = raw.decode("cp1251", errors="replace")
+    return all("\u0430" <= ch <= "\u044a"        # only а..ъ
+               for ch in as_cyrillic if "\u0400" <= ch <= "\u04ff")
+
+
+def detect_encoding(raw: bytes) -> str:
+    """
+    Picks the text encoding of a CSV file from its raw bytes:
+      1. UTF-16 (Excel "Unicode text") — recognised by its BOM
+      2. UTF-8, with or without BOM — what modern exports use
+      3. Windows-1255 (Hebrew) vs Windows-1251 (Cyrillic) — see _looks_hebrew
+      4. Latin-1 — decodes anything, last resort
+    """
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return "utf-16"
+    try:
+        raw.decode("utf-8-sig")
+        return "utf-8-sig"
+    except UnicodeDecodeError:
+        pass
+    if _looks_hebrew(raw):
+        return "cp1255"
+    try:
+        raw.decode("cp1251")
+        return "cp1251"
+    except UnicodeDecodeError:
+        return "latin-1"
+
+
+def load_csv_text(filepath: str) -> dict:
+    """
+    Reads the file once and returns its decoded text, encoding and delimiter.
+    Both the preview and the import use it, so they always read the file
+    the same way.
+    """
+    with open(filepath, "rb") as f:
+        raw = f.read()
+    encoding = detect_encoding(raw)
+    text = raw.decode(encoding)
+    try:
+        delimiter = csv.Sniffer().sniff(text[:4096], delimiters=",;\t|").delimiter
+    except csv.Error:
+        delimiter = ","                    # e.g. a file with a single column
+    return {"text": text, "encoding": encoding, "delimiter": delimiter}
+
+
 def read_csv_preview(filepath: str, max_rows: int = 5) -> dict:
     """
     Reads a CSV file and returns headers + preview rows.
 
     Returns:
         {
-            "headers":  ["Date", "Description", "Amount", "Balance"],
-            "rows":     [["01.03.2025", "Grocery store", "-45.50", "1234.00"], ...],
+            "headers":    ["Date", "Description", "Amount", "Balance"],
+            "rows":       [["01.03.2025", "Grocery store", "-45.50", "1234.00"], ...],
             "total_rows": 156,
-            "encoding":   "utf-8",
+            "encoding":   "utf-8-sig",
+            "delimiter":  ",",
         }
     """
-    # Try different encodings
-    for encoding in ["utf-8", "utf-8-sig", "cp1251", "latin-1"]:
-        try:
-            with open(filepath, "r", encoding=encoding) as f:
-                # Detect delimiter
-                sample = f.read(4096)
-                f.seek(0)
+    loaded = load_csv_text(filepath)
+    reader = csv.reader(io.StringIO(loaded["text"]), delimiter=loaded["delimiter"])
 
-                dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
-                reader = csv.reader(f, dialect)
+    headers = next(reader, None)
+    if not headers:
+        raise ValueError("The CSV file is empty.")
 
-                headers = next(reader)
-                rows = []
-                total = 0
-                for row in reader:
-                    total += 1
-                    if len(rows) < max_rows:
-                        rows.append(row)
+    rows = []
+    total = 0
+    for row in reader:
+        total += 1
+        if len(rows) < max_rows:
+            rows.append(row)
 
-                return {
-                    "headers":    headers,
-                    "rows":       rows,
-                    "total_rows": total,
-                    "encoding":   encoding,
-                    "delimiter":  dialect.delimiter,
-                }
-        except (UnicodeDecodeError, csv.Error):
-            continue
-
-    raise ValueError("Could not read CSV file. Unsupported encoding or format.")
+    return {
+        "headers":    headers,
+        "rows":       rows,
+        "total_rows": total,
+        "encoding":   loaded["encoding"],
+        "delimiter":  loaded["delimiter"],
+    }
 
 
 def parse_amount(text: str) -> tuple[int, str]:
@@ -241,15 +304,14 @@ def import_transactions(
     """
     if sign_mode not in SIGN_MODES:
         raise ValueError(f"Unknown sign_mode: {sign_mode!r}")
-    preview = read_csv_preview(filepath, max_rows=0)
-    encoding = preview["encoding"]
-    delimiter = preview["delimiter"]
+    loaded = load_csv_text(filepath)
+    delimiter = loaded["delimiter"]
 
     imported = 0
     skipped = 0
     errors = []
 
-    with open(filepath, "r", encoding=encoding) as f:
+    with io.StringIO(loaded["text"]) as f:
         reader = csv.reader(f, delimiter=delimiter)
 
         if skip_header:
