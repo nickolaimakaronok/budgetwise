@@ -15,7 +15,9 @@ windows call them correctly — Add calls "add", Edit saves the note — and tha
 no window crashes. Buttons are pressed through their own command (invoke),
 so a wrong command= is caught too.
 
-Needs a screen: skipped where Tk can't open a window (Linux without a display).
+Needs a real screen, so it runs on a developer's computer: skipped where Tk
+can't open a window (Linux without a display) and on CI machines, where
+Python crashes inside Tk on the hosted macOS runners.
 System dialogs (message boxes, file pickers), opening Finder/Explorer and
 system notifications are replaced, so nothing waits for a click.
 """
@@ -45,7 +47,11 @@ def _can_open_window() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(not _can_open_window(), reason="no screen for Tk windows")
+# GitHub Actions sets CI=true. Checked first, so no Tk window is even tried there.
+pytestmark = pytest.mark.skipif(
+    bool(os.environ.get("CI")) or not _can_open_window(),
+    reason="needs a real screen for Tk windows (skipped on CI)",
+)
 
 
 class Recorder:
