@@ -5,6 +5,7 @@ Run once via: python -m db.migrations
 """
 
 import os
+import sys
 from datetime import date
 from db.database import db
 from db.backup import create_auto_backup
@@ -49,8 +50,10 @@ def move_old_data_folder():
     to the app data folder (see db/data_move.py).
     Only into the standard folder: when BUDGETWISE_DATA_DIR is set, or the
     database is pointed somewhere else (tests do that), ~/Documents is left alone.
+    Skipped in the built app too: downloaded 2.x builds never had data in
+    ~/Documents, and just looking there makes macOS ask for permission.
     """
-    if os.environ.get(DATA_DIR_ENV):
+    if os.environ.get(DATA_DIR_ENV) or getattr(sys, "frozen", False):
         return
     from db.database import DB_PATH
     new_dir = os.path.dirname(DB_PATH)

@@ -204,3 +204,15 @@ def test_database_elsewhere_never_pulls_data(app_start, monkeypatch):
     migrations.run()
     assert User.select().count() == 0
     assert (old_dir / "budget.db").exists()
+
+
+
+
+def test_built_app_never_looks_in_documents(app_start, monkeypatch):
+    """Inside the PyInstaller build (sys.frozen) ~/Documents is not touched — no macOS permission prompt."""
+    old_dir, new_dir = app_start
+    monkeypatch.delenv("BUDGETWISE_DATA_DIR", raising=False)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    migrations.run()
+    assert User.select().count() == 0
+    assert (old_dir / "budget.db").exists()

@@ -16,7 +16,6 @@ backups/
 # PyInstaller
 dist/
 build/
-*.spec
 
 # IDE
 .idea/

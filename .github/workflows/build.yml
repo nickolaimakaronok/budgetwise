@@ -1,0 +1,112 @@
+name: Build
+
+# Builds BudgetWise for macOS (Apple Silicon + Intel) and Windows.
+#  - By hand: Actions → Build → Run workflow → the zips appear under "Artifacts"
+#  - Push a tag like v2.0.0 → the same zips are published as a GitHub Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            os: macos-15
+            zip: BudgetWise-macOS-AppleSilicon.zip
+          - name: macOS (Intel)
+            os: macos-15-intel
+            zip: BudgetWise-macOS-Intel.zip
+          - name: Windows
+            os: windows-latest
+            zip: BudgetWise-Windows.zip
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
+
+      - name: Build with PyInstaller
+        run: python -m PyInstaller --noconfirm --clean BudgetWise.spec
+
+      - name: Self-check the built app (macOS)
+        if: runner.os == 'macOS'
+        timeout-minutes: 5
+        env:
+          BUDGETWISE_SMOKE_TEST: '1'
+          BUDGETWISE_DATA_DIR: ${{ runner.temp }}/smoke
+        run: |
+          status=0
+          dist/BudgetWise.app/Contents/MacOS/BudgetWise || status=$?
+          cat "$BUDGETWISE_DATA_DIR/budgetwise.log" || true
+          exit $status
+
+      - name: Self-check the built app (Windows)
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: pwsh
+        env:
+          BUDGETWISE_SMOKE_TEST: '1'
+          BUDGETWISE_DATA_DIR: ${{ runner.temp }}\smoke
+        run: |
+          $p = Start-Process -FilePath "dist\BudgetWise\BudgetWise.exe" -Wait -PassThru
+          Get-Content "$env:BUDGETWISE_DATA_DIR\budgetwise.log" -ErrorAction SilentlyContinue
+          exit $p.ExitCode
+
+      - name: Zip (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent dist/BudgetWise.app "${{ matrix.zip }}"
+
+      - name: Zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist\BudgetWise -DestinationPath "${{ matrix.zip }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.zip }}
+          path: ${{ matrix.zip }}
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: zips
+          merge-multiple: true
+
+      - name: Publish the release with the zips
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${{ github.ref_name }}" zips/*.zip
+          --repo "${{ github.repository }}"
+          --title "BudgetWise ${{ github.ref_name }}"
+          --generate-notes

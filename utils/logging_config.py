@@ -12,6 +12,7 @@ Log levels:
 
 import logging
 import os
+import sys
 from datetime import datetime
 
 from utils.platform_utils import app_data_dir
@@ -45,15 +46,17 @@ def setup_logging(debug: bool = False) -> None:
     file_handler.setFormatter(formatter)
     file_handler.setLevel(level)
 
-    # ── Console handler — prints to terminal ──────────────────────────────────
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(level)
-
     # ── Root logger — applies to all modules ─────────────────────────────────
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
     root_logger.addHandler(file_handler)
-    root_logger.addHandler(console_handler)
+
+    # ── Console handler — prints to terminal ──────────────────────────────────
+    # The built Windows app has no terminal at all (sys.stderr is None there)
+    if sys.stderr is not None:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        console_handler.setLevel(level)
+        root_logger.addHandler(console_handler)
 
     logging.info(f"Logging started → {LOG_FILE}")

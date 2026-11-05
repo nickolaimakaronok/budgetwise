@@ -26,6 +26,7 @@ from db.migrations import run as run_migrations
 from models.models import User
 from utils.i18n import set_language
 from utils.formatters import set_currency
+from utils import smoke_test
 
 
 def _get_or_create_user() -> User | None:
@@ -38,6 +39,12 @@ def _get_or_create_user() -> User | None:
 
     if user is not None:
         return user
+
+        # Self-check of the built app (release workflow) — no onboarding window
+    if smoke_test.enabled():
+        return User.create(name="Smoke Test", currency="USD", language="en")
+
+    # ── No user → show onboarding ─────────────────────────────────────────
 
     # ── No user → show onboarding ─────────────────────────────────────────
     logger.info("No user found — launching onboarding")
@@ -109,7 +116,12 @@ def main():
     # 6. Launch the app
     from ui.app import App
     app = App(user)
+    if smoke_test.enabled():
+        smoke_test.schedule(app)
     app.mainloop()
+
+    if smoke_test.enabled():
+        sys.exit(1 if smoke_test.errors else 0)
 
 
 if __name__ == "__main__":
