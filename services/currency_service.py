@@ -13,11 +13,11 @@ All the arithmetic uses Decimal, never float:
 
 import re
 from datetime import datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Context, Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Optional
 
 from db.database import db
-from models.models import ExchangeRate, Transaction, User
+from models.models import Budget, ExchangeRate, Goal, Transaction, User
 from services.transaction_service import add_transaction
 
 _CODE = re.compile(r"[A-Z]{3}")
@@ -148,3 +148,118 @@ def add_transaction_in_currency(
         exchange_rate=format_rate(rate),
         **kwargs,
     )
+
+
+
+
+
+
+# ── Changing the main currency ────────────────────────────────────────────────
+
+MODE_RELABEL = "relabel"   # amounts were already in the new currency — only the symbol changes
+MODE_CONVERT = "convert"   # moving to another currency — everything is converted with one rate
+
+
+def _divide_cents(amount_cents: int, rate: Decimal) -> int:
+    """Old main currency → new: amount / rate, half up. A positive amount never becomes 0."""
+    result = int((Decimal(amount_cents) / rate).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+    return max(result, 1) if amount_cents > 0 else result
+
+
+def _computed_rate(value: Decimal) -> str:
+    """A rate we calculated (1/3.95, a cross-rate) — kept to 8 significant digits: '0.25316456'."""
+    return format_rate(Context(prec=8, rounding=ROUND_HALF_UP).plus(value))
+
+
+def _backup_before_change() -> None:
+    """A backup that is never rotated away, made before every amount is rewritten."""
+    from db.backup import create_backup
+    from db.database import DB_PATH
+    create_backup(DB_PATH, prefix="before_currency_change_")
+
+
+def change_main_currency(user: User, new_currency: str, mode: str, rate=None) -> dict:
+    """
+    Switches the main currency of `user`.
+
+    MODE_RELABEL — the amounts were already in the new currency (the wrong one
+      was picked at the start): only the symbol changes, every number stays.
+
+    MODE_CONVERT — moving to another currency. `rate` is 1 NEW = rate OLD,
+      e.g. 1 EUR = 3.95 ILS. In one database transaction (all or nothing):
+        - a purchase made in the new currency gets back its exact original amount
+        - every other amount — transactions, budgets, goals — is divided by rate
+        - purchases in the old main currency remember it: 70 ₪ becomes
+          17.72 € with currency="ILS" and original 70.00, so switching back is exact
+        - saved rates become cross-rates (1 USD = 3.70 ₪ → 1 USD = 0.937 €);
+          the rate of the new currency is removed, one for the old currency added
+      A backup is made before anything changes.
+
+    Returns how many rows were converted: {"transactions": n, "budgets": n, "goals": n}.
+    """
+    new_code = normalize_currency_code(new_currency)
+    old_code = user.currency
+    if new_code == old_code:
+        raise ValueError(f"{new_code} is already the main currency")
+    if mode not in (MODE_RELABEL, MODE_CONVERT):
+        raise ValueError(f"Unknown mode: {mode!r}")
+
+    database = Transaction._meta.database      # the database the models are bound to
+    counts = {"transactions": 0, "budgets": 0, "goals": 0}
+
+    if mode == MODE_RELABEL:
+        with database.atomic():
+            (ExchangeRate.delete()
+             .where((ExchangeRate.user == user) & (ExchangeRate.currency == new_code))
+             .execute())
+            user.currency = new_code
+            user.save()
+        return counts
+
+    switch = parse_rate(rate)
+    _backup_before_change()
+
+    with database.atomic():
+        for tx in Transaction.select().where(Transaction.user == user):
+            if tx.currency == new_code and tx.original_amount_cents is not None:
+                # was paid in the new currency — the exact amount is known
+                tx.amount_cents = tx.original_amount_cents
+                tx.currency = tx.original_amount_cents = tx.exchange_rate = None
+            elif tx.currency is None:
+                # was in the old main currency — keep it as a purchase in that currency
+                tx.currency = old_code
+                tx.original_amount_cents = tx.amount_cents
+                tx.exchange_rate = _computed_rate(Decimal(1) / switch)
+                tx.amount_cents = _divide_cents(tx.amount_cents, switch)
+            else:
+                # a third currency — its rate becomes a cross-rate
+                tx.exchange_rate = _computed_rate(Decimal(tx.exchange_rate) / switch)
+                tx.amount_cents = _divide_cents(tx.amount_cents, switch)
+            tx.save()
+            counts["transactions"] += 1
+
+        for budget in Budget.select().where(Budget.user == user):
+            budget.limit_cents = _divide_cents(budget.limit_cents, switch)
+            budget.save()
+            counts["budgets"] += 1
+
+        for goal in Goal.select().where(Goal.user == user):
+            goal.target_cents = _divide_cents(goal.target_cents, switch)
+            goal.current_cents = _divide_cents(goal.current_cents, switch)
+            goal.save()
+            counts["goals"] += 1
+
+        for row in ExchangeRate.select().where(ExchangeRate.user == user):
+            if row.currency == new_code:
+                row.delete_instance()
+            else:
+                row.rate = _computed_rate(Decimal(row.rate) / switch)
+                row.updated_at = datetime.now()
+                row.save()
+        ExchangeRate.create(user=user, currency=old_code,
+                            rate=_computed_rate(Decimal(1) / switch))
+
+        user.currency = new_code
+        user.save()
+
+    return counts
