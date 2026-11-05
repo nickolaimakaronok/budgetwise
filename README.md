@@ -12,6 +12,23 @@ Everything stays on your computer in a local SQLite database.
 
 ---
 
+## Download
+
+**[⬇️ BudgetWise 2.0 — latest release](https://github.com/nickolaimakaronok/budgetwise/releases/latest)** — no Python needed.
+
+| Computer | File |
+|---|---|
+| Mac with Apple Silicon (M-series) | `BudgetWise-macOS-AppleSilicon.zip` |
+| Mac with Intel | `BudgetWise-macOS-Intel.zip` |
+| Windows 10 / 11 | `BudgetWise-Windows.zip` |
+
+The apps are not signed with a paid Apple / Microsoft certificate, so the system asks once on the first start:
+
+- **macOS** — unzip and open `BudgetWise.app`. If macOS says it can't verify the app, click **Done**, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
+- **Windows** — right-click the zip → **Extract All**, open the `BudgetWise` folder and run `BudgetWise.exe`. If SmartScreen appears, click **More info → Run anyway**.
+
+---
+
 ## Features
 
 - **Dashboard** — monthly balance, income, expenses and savings, latest transactions
@@ -57,6 +74,7 @@ Everything stays on your computer in a local SQLite database.
 - **Cross-platform.** Everything OS-specific lives in `utils/platform_utils.py`: the data folder, keyboard shortcuts, opening folders, and notifications (`osascript` on macOS, `plyer` on Windows and Linux).
 - **Performance.** Transactions render in pages of 200 rows, totals are calculated with SQL `SUM … GROUP BY`, and tags load in one query instead of one per row.
 - **Tests and CI.** 260+ pytest tests. GitHub Actions runs them on macOS, Windows and Linux with Python 3.12, 3.13 and 3.14 on every push. Tests use in-memory or temporary databases and never touch real user data.
+- **Release pipeline.** A version tag builds the app for macOS (Apple Silicon and Intel) and Windows, then runs each packaged app in a self-check mode that opens every page and builds a PDF report; the release is published only if all of them pass. This caught a crash that existed only in the packaged app — a Pillow module PyInstaller hadn't bundled.
 
 ---
 
@@ -98,6 +116,14 @@ python -m pytest tests/ -q
 
 Use `python -m pytest` rather than plain `pytest`, so the tests run with the Python from `.venv`.
 
+### Build the app yourself
+
+```bash
+python -m PyInstaller --noconfirm --clean BudgetWise.spec
+```
+
+The result is `dist/BudgetWise.app` on macOS and `dist/BudgetWise/BudgetWise.exe` on Windows.
+
 ---
 
 ## Where your data lives
@@ -111,7 +137,7 @@ Use `python -m pytest` rather than plain `pytest`, so the tests run with the Pyt
 The folder contains `budget.db`, the `backups/` folder and `budgetwise.log`. The exact path is shown in **Settings**, and **Open Backup Folder** opens the backups inside it.
 To keep the data somewhere else, set the `BUDGETWISE_DATA_DIR` environment variable.
 
-> **Upgrading from 1.x:** data in `~/Documents/BudgetWise` is moved automatically on the first start. The old database stays there as `budget.db.moved`.
+> **Upgrading from 1.x (running from source):** data in `~/Documents/BudgetWise` is moved automatically on the first start. The old database stays there as `budget.db.moved`.
 
 ---
 
@@ -121,6 +147,8 @@ To keep the data somewhere else, set the `BUDGETWISE_DATA_DIR` environment varia
 budgetwise/
 ├── main.py                     # entry point: logging → migrations → onboarding → main window
 ├── requirements.txt
+├── BudgetWise.spec             # PyInstaller build: macOS .app, Windows .exe
+├── .github/workflows/          # tests.yml (tests on every push), build.yml (release builds)
 ├── db/
 │   ├── database.py             # SQLite connection (Peewee) in the app-data folder
 │   ├── migrations.py           # tables, schema upgrades, default categories
@@ -145,6 +173,7 @@ budgetwise/
 │   ├── notifications.py        # background budget checks
 │   ├── i18n.py                 # English / Russian / German texts
 │   ├── formatters.py           # money and date formatting and parsing
+│   ├── smoke_test.py           # self-check of the packaged app, run by build.yml
 │   └── ...                     # theme, constants, logging, category translations
 └── tests/                      # pytest suite; conftest.py points the app at a temporary folder
 ```
@@ -167,7 +196,6 @@ budgetwise/
 
 ## Roadmap
 
-- [ ] Downloadable builds for macOS (`.app`) and Windows (`.exe`) via GitHub Actions and Releases
 - [ ] Layout polish for high-DPI Windows screens
 - [ ] Stricter amount validation in forms
 - [ ] Translated notification texts and PDF fonts for Cyrillic and Hebrew
@@ -178,6 +206,7 @@ budgetwise/
 ## Changelog
 
 ### 2.0.0 — November 2026
+- Downloadable apps for macOS (Apple Silicon and Intel) and Windows, built and self-checked by GitHub Actions
 - Cross-platform: Ctrl+N on Windows and Linux, opening folders and system notifications on every OS
 - Data moved to the OS app-data folder with a safe automatic migration; a clear error window if the data can't be opened
 - Reliable backups through the SQLite backup API, with rotation
