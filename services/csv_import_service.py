@@ -14,6 +14,7 @@ from datetime import datetime, date
 from typing import Optional
 
 from models.models import Category, User
+from utils.currencies import CURRENCIES
 from services.transaction_service import add_transaction
 from db.database import db
 
@@ -157,9 +158,10 @@ def parse_amount(text: str) -> tuple[int, str]:
     # also accept the typographic minus "−" (U+2212) some exports use
     cleaned = text.strip().replace(" ", "").replace("\u2212", "-")
 
-    # Remove currency symbols
-    for sym in ["$", "€", "£", "₽", "₪", "CHF", "USD", "EUR", "ILS", "RUB"]:
-        cleaned = cleaned.replace(sym, "")
+    # Remove currency codes and symbols ("ILS", "₪", "BYN", "Br", …) and "CHF"
+    for code, (symbol, _name) in CURRENCIES.items():
+        cleaned = cleaned.replace(code, "").replace(symbol, "")
+    cleaned = cleaned.replace("CHF", "")
 
     cleaned = cleaned.strip()
 

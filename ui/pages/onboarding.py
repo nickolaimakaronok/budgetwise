@@ -15,6 +15,7 @@ Usage in main.py:
 
 import customtkinter as ctk
 from utils.i18n import t, set_language
+from utils.currencies import CURRENCY_CODES, currency_label
 from utils.category_translations import update_system_category_translations
 
 # ── Theme colors ──────────────────────────────────────────────────────────────
@@ -36,15 +37,9 @@ LANGUAGES = {
     "Deutsch":  "de",
 }
 
-CURRENCIES = ["USD", "EUR", "GBP", "RUB", "ILS"]
-
-CURRENCY_LABELS = {
-    "USD": "$ — US Dollar",
-    "EUR": "€ — Euro",
-    "GBP": "£ — British Pound",
-    "RUB": "₽ — Российский рубль",
-    "ILS": "₪ — Israeli Shekel",
-}
+# From the one list in utils/currencies.py
+CURRENCIES = CURRENCY_CODES
+CURRENCY_LABELS = {code: currency_label(code) for code in CURRENCY_CODES}
 
 
 class OnboardingWindow(ctk.CTk):

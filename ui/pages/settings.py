@@ -10,6 +10,7 @@ from db.database import db, DB_PATH
 from db.backup import create_backup, default_backup_dir
 from models.models import Category, User
 from utils.formatters import set_currency
+from utils.currencies import CURRENCY_CODES
 from utils.platform_utils import open_path, is_mac
 from utils.i18n import t, set_language, get_language
 
@@ -85,7 +86,7 @@ class SettingsPage(ctk.CTkFrame):
         self.currency_var = ctk.StringVar(value=self.user.currency)
         ctk.CTkOptionMenu(
             card,
-            values=["USD", "EUR", "GBP", "RUB", "ILS"],
+            values=CURRENCY_CODES,
             variable=self.currency_var,
             font=ctk.CTkFont(size=14), height=40, corner_radius=8,
         ).grid(row=4, column=0, padx=24, pady=(0, 12), sticky="ew")

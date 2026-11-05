@@ -6,13 +6,12 @@ Formatting helpers for money, dates, and other display values.
 from datetime import date, datetime
 
 
-CURRENCY_SYMBOLS = {
-    "USD": "$",
-    "EUR": "€",
-    "GBP": "£",
-    "RUB": "₽",
-    "ILS": "₪",  # Israeli Shekel
-}
+from datetime import date, datetime
+
+from utils.currencies import CURRENCIES
+
+# "ILS" → "₪" — built from the one list in utils/currencies.py
+CURRENCY_SYMBOLS = {code: symbol for code, (symbol, _name) in CURRENCIES.items()}
 
 _current_currency = "USD"
 
