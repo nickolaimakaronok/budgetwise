@@ -32,18 +32,25 @@ def add_transaction(
     amount_cents: int,
     category: Optional[Category] = None,
     tx_date: Optional[date_type] = None,
-    note: str = "",
-    is_recurring: bool = False
-) -> Transaction:
+        note: str = "",
+        is_recurring: bool = False,
+        currency: Optional[str] = None,
+        original_amount_cents: Optional[int] = None,
+        exchange_rate: Optional[str] = None,
+    ) -> Transaction:
     """
     Creates and saves a new transaction.
     With is_recurring=True it becomes the TEMPLATE of a monthly series:
     copies for the following months are made by create_recurring_for_month().
+    The three currency fields are filled by
+    currency_service.add_transaction_in_currency() — amount_cents is then
+    already converted to the main currency.
 
-    Usage:
-        tx = add_transaction(user, "expense", 50000, category=groceries_cat)
-        # → saves a 500.00 expense to the database
-    """
+
+Usage:
+    tx = add_transaction(user, "expense", 50000, category=groceries_cat)
+    # → saves a 500.00 expense to the database
+"""
     if amount_cents <= 0:
         raise ValueError("Amount must be greater than zero")
     if type not in ("income", "expense"):
@@ -61,8 +68,11 @@ def add_transaction(
             is_recurring=is_recurring,
             # the template itself already covers its own month
             recurring_last_month=_first_of_month(tx_date) if is_recurring else None,
+            currency=currency,
+            original_amount_cents=original_amount_cents,
+            exchange_rate=exchange_rate,
         )
-    return tx
+        return tx
 
 
 def get_transactions(

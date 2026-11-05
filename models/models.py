@@ -71,6 +71,22 @@ class Transaction(BaseModel):
                                        on_delete="SET NULL")
     recurring_last_month = DateField(null=True)
 
+    # ── Other currencies ──────────────────────────────────────────────────
+    # amount_cents is ALWAYS in the main currency, so totals, budgets and
+    # charts need no changes. For a purchase in another currency we also keep
+    # what was actually paid and the rate used at that moment:
+    #   20.00 EUR at 1 EUR = 3.95 ₪ → currency="EUR", original_amount_cents=2000,
+    #                                 exchange_rate="3.95", amount_cents=7900
+    # NULL in all three = entered in the main currency.
+    currency = TextField(null=True)
+    original_amount_cents = IntegerField(null=True)
+    exchange_rate = TextField(null=True)  # Decimal as text — exact, no float
+
+    @property
+    def is_foreign(self) -> bool:
+        """True if the transaction was entered in a currency other than the main one."""
+        return self.currency is not None
+
     @property
     def is_recurring_series(self) -> bool:
         """True for a template or any copy generated from one (used for the 🔄 marker)."""
@@ -134,4 +150,21 @@ class TransactionTag(BaseModel):
         indexes = ((("transaction", "tag"), True),)
 
 
-ALL_MODELS = [User, Category, Transaction, Budget, Goal, Tag, TransactionTag]
+class ExchangeRate(BaseModel):
+    """
+    A manual exchange rate from Settings: 1 <currency> = <rate> main currency.
+    Only the latest rate per currency is kept here; each transaction stores
+    the rate it was converted with, so changing a rate never changes the past.
+    """
+    id         = AutoField()
+    user       = ForeignKeyField(User, backref="exchange_rates", on_delete="CASCADE")
+    currency   = TextField()                    # "EUR"
+    rate       = TextField()                    # "3.95" — Decimal as text
+    updated_at = DateTimeField(default=datetime.now)
+
+    class Meta:
+        table_name = "exchange_rates"
+        indexes = ((("user", "currency"), True),)  # one rate per currency per user
+
+
+ALL_MODELS = [User, Category, Transaction, Budget, Goal, Tag, TransactionTag, ExchangeRate]

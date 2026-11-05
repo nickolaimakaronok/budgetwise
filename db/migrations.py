@@ -96,6 +96,11 @@ _NEW_COLUMNS = [
     ("transactions", "recurring_parent_id",
      "INTEGER REFERENCES transactions (id) ON DELETE SET NULL"),
     ("transactions", "recurring_last_month", "DATE"),
+    # v2.1.0 — purchases in other currencies (the exchange_rates table is new,
+    # create_tables makes it)
+    ("transactions", "currency", "TEXT"),
+    ("transactions", "original_amount_cents", "INTEGER"),
+    ("transactions", "exchange_rate", "TEXT"),
 ]
 # v1.8.0 — tags and transaction_tags are new TABLES,
 # so create_tables(safe=True) handles them — no ALTER needed.

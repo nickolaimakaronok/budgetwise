@@ -78,3 +78,18 @@ def test_upgrade_makes_a_backup(old_db, tmp_path):
     assert len(backups) == 1
     con = sqlite3.connect(str(backups[0]))
     assert con.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == 4
+
+
+
+
+
+def test_upgrade_adds_currency_columns_and_rates_table(old_db):
+    """A 1.x/2.0 database gets the multi-currency columns; old rows stay in the main currency."""
+    migrations.run()
+    con = sqlite3.connect(old_db)
+    cols = {row[1] for row in con.execute("PRAGMA table_info(transactions)")}
+    assert {"currency", "original_amount_cents", "exchange_rate"} <= cols
+    tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "exchange_rates" in tables
+    assert con.execute("SELECT COUNT(*) FROM transactions WHERE currency IS NOT NULL").fetchone()[0] == 0
+    assert con.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
