@@ -14,7 +14,7 @@ Everything stays on your computer in a local SQLite database.
 
 ## Download
 
-**[⬇️ BudgetWise 2.0 — latest release](https://github.com/nickolaimakaronok/budgetwise/releases/latest)** — no Python needed.
+**[⬇️ BudgetWise 2.1 — latest release](https://github.com/nickolaimakaronok/budgetwise/releases/latest)** — no Python needed.
 
 | Computer | File |
 |---|---|
@@ -33,30 +33,40 @@ The apps are not signed with a paid Apple / Microsoft certificate, so the system
 
 - **Dashboard** — monthly balance, income, expenses and savings, latest transactions
 - **Transactions** — add, edit, delete; filter by type, category, dates and #tags; search by note, category or tag; quick add with ⌘N / Ctrl+N
+- **Multiple currencies** — add a purchase in euros, dollars or any other currency: it is converted at the rate of that day and the list shows both amounts; changing a rate later never changes past purchases; the main currency can be changed later — only the symbol, or converting everything with one rate
 - **Recurring payments** — rent, subscriptions and salary are added every month automatically; missed months are caught up and the day never drifts (31 Jan → 28 Feb → 31 Mar)
-- **Bank CSV import** — choose the columns, date format and how the amount sign is read; the file encoding is detected automatically (UTF-8, UTF-16, Windows-1251 Cyrillic, Windows-1255 Hebrew)
-- **Export** — CSV that opens correctly in Excel and can be imported back, plus a monthly PDF report
+- **Bank CSV import** — choose the columns, date format and how the amount sign is read; the file encoding is detected automatically (UTF-8, UTF-16, Windows-1251 Cyrillic, Windows-1255 Hebrew); a statement in another currency is converted at the rate you enter
+- **Export** — CSV that opens correctly in Excel and can be imported back (with the original amount, currency and rate), plus a monthly PDF report
 - **Budgets** — monthly limit per category, warning at 80 % and alert at 100 %, copy last month's limits in one click, system notifications when a limit is exceeded
-- **Analytics** — spending by category, by day and income vs. expenses over the year
+- **Analytics** — spending by category and by day, income vs. expenses over the year, best and worst month, month-by-month comparison
 - **Goals** — savings goals with contributions, deadlines and how much to save per month
-- **Settings** — currency (₪ $ € £ ₽), light / dark / system theme, English / Russian / German, custom categories, one-click backup
+- **Settings** — main currency (₪ $ € £ ₽ Br), exchange rates, light / dark / system theme, English / Russian / German, custom categories, one-click backup
 
 <table>
   <tr>
-    <td><img src="screenshots/Transactions_screenshot.png" alt="Transactions"><br><sub>Transactions — search and filters</sub></td>
-    <td><img src="screenshots/Repeat_transactions_screenshot.png" alt="Add transaction"><br><sub>Adding a monthly recurring payment</sub></td>
+    <td colspan="2"><img src="screenshots/Transactions_screenshot.png" alt="Transactions"><br><sub>Transactions — search, filters, recurring payments 🔄 and a purchase in euros</sub></td>
   </tr>
   <tr>
-    <td><img src="screenshots/Budget_screenshot.png" alt="Budget"><br><sub>Budget limits per category</sub></td>
-    <td><img src="screenshots/Goals_screenshot.png" alt="Goals"><br><sub>Savings goals with deadlines</sub></td>
+    <td width="50%"><img src="screenshots/Budget_screenshot.png" alt="Budget"><br><sub>Budget limits — over, close to and under the limit</sub></td>
+    <td width="50%"><img src="screenshots/Goals_screenshot.png" alt="Goals"><br><sub>Savings goals with deadlines</sub></td>
   </tr>
   <tr>
     <td><img src="screenshots/Analytics_screenshot1.png" alt="Analytics"><br><sub>Analytics — spending by category</sub></td>
-    <td><img src="screenshots/Analytics_screenshot2.png" alt="Analytics breakdown"><br><sub>Analytics — daily spending and breakdown</sub></td>
+    <td><img src="screenshots/Analytics_screenshot2.png" alt="Analytics breakdown"><br><sub>Analytics — breakdown and the year overview</sub></td>
   </tr>
   <tr>
-    <td><img src="screenshots/Settings_screenshot1.png" alt="Settings"><br><sub>Settings — profile and appearance</sub></td>
-    <td><img src="screenshots/Settings_screenshot2.png" alt="Settings data"><br><sub>Settings — categories and backups</sub></td>
+    <td><img src="screenshots/Settings_screenshot1.png" alt="Settings"><br><sub>Settings — main currency and exchange rates</sub></td>
+    <td><img src="screenshots/Settings_screenshot2.png" alt="Settings data"><br><sub>Settings — theme, language, categories and backups</sub></td>
+  </tr>
+</table>
+
+**Multiple currencies**
+
+<table>
+  <tr>
+    <td align="center"><img src="screenshots/Add_in_currency_screenshot.png" alt="Add a purchase in euros" height="300"><br><sub>A purchase in euros, converted at the day's rate</sub></td>
+    <td align="center"><img src="screenshots/Import_currency_screenshot.png" alt="Import a statement in euros" height="300"><br><sub>Importing a bank statement in euros</sub></td>
+    <td align="center"><img src="screenshots/Change_currency_screenshot.png" alt="Change the main currency" height="300"><br><sub>Changing the main currency</sub></td>
   </tr>
 </table>
 
@@ -66,6 +76,7 @@ The apps are not signed with a paid Apple / Microsoft certificate, so the system
 
 - **Layered architecture.** `ui/` only displays data, `services/` holds all business logic, `models/` defines the Peewee ORM models. The UI never queries the database directly, so the logic is tested without opening a window.
 - **Money is stored as integer cents.** No floating-point rounding anywhere, including CSV import and export.
+- **Currencies without rounding drift.** A purchase is converted once, when it is saved, with `Decimal` and the rate of that day; the original amount, currency and rate stay on the transaction, like on a bank statement. Changing the main currency converts transactions, budgets, goals and saved rates in one database transaction (all or nothing) after a backup, and purchases made in the new currency get back their exact original amount, so switching back is exact.
 - **Data safety**
   - Automatic backup on every start using the SQLite backup API (it includes data still in the WAL file); the newest 10 are kept, manual backups are never deleted.
   - Versioned schema migrations (`PRAGMA user_version`) upgrade old databases in place. A regression test covers a real bug where adding a column after `create_tables()` corrupted the database file.
@@ -73,7 +84,7 @@ The apps are not signed with a paid Apple / Microsoft certificate, so the system
 - **Recurring transactions as a series.** One template, generated copies and a "last generated month" counter: running it twice creates nothing new, missed months are caught up, and editing or deleting a copy never causes a double charge.
 - **Cross-platform.** Everything OS-specific lives in `utils/platform_utils.py`: the data folder, keyboard shortcuts, opening folders, and notifications (`osascript` on macOS, `plyer` on Windows and Linux).
 - **Performance.** Transactions render in pages of 200 rows, totals are calculated with SQL `SUM … GROUP BY`, and tags load in one query instead of one per row.
-- **Tests and CI.** 260+ pytest tests. GitHub Actions runs them on macOS, Windows and Linux with Python 3.12, 3.13 and 3.14 on every push. Tests use in-memory or temporary databases and never touch real user data.
+- **Tests and CI.** 320+ pytest tests, including an end-to-end test that clicks through the real windows: onboarding, transactions in two currencies, import and export, budgets, goals, settings and changing the main currency. GitHub Actions runs them on macOS, Windows and Linux with Python 3.12, 3.13 and 3.14 on every push. Tests use in-memory or temporary databases and never touch real user data.
 - **Release pipeline.** A version tag builds the app for macOS (Apple Silicon and Intel) and Windows, then runs each packaged app in a self-check mode that opens every page and builds a PDF report; the release is published only if all of them pass. This caught a crash that existed only in the packaged app — a Pillow module PyInstaller hadn't bundled.
 
 ---
@@ -204,6 +215,15 @@ budgetwise/
 ---
 
 ## Changelog
+
+### 2.1.0 — November 2026
+- Purchases in other currencies: currency picker, exchange rate with a live preview and a hint when the rate is old, both amounts shown in the list
+- Exchange rates in Settings: add, update, delete, with the date of the last update
+- Changing the main currency: only the symbol, or convert all amounts, budgets, goals and rates with one rate (backup first, all or nothing)
+- Recurring payments in another currency use the current rate; CSV export keeps the original amount, currency and rate; CSV import of a statement in another currency
+- Belarusian ruble (Br); one shared currency list for onboarding, Settings and import
+- Fixes: crash on an infinite or zero amount; the note is saved again when a transaction is edited
+- End-to-end test through the real windows; 320+ tests
 
 ### 2.0.0 — November 2026
 - Downloadable apps for macOS (Apple Silicon and Intel) and Windows, built and self-checked by GitHub Actions
