@@ -62,9 +62,10 @@ def test_signed_amounts_type_column_and_bom(user, groceries, salary, tmp_path):
 
     assert open(path, "rb").read().startswith(b"\xef\xbb\xbf")      # BOM for Excel
     rows = _read(path)
-    assert rows[0] == ["Date", "Type", "Category", "Amount", "Note", "Tags"]
-    assert rows[1] == ["02.03.2026", "Income", "Salary", "0.05", "tiny", ""]
-    assert rows[2] == ["01.03.2026", "Expense", "Продукты", "-450.50", "Магазин", "#food"]
+    assert rows[0] == ["Date", "Type", "Category", "Amount", "Note", "Tags",
+                       "Original amount", "Currency", "Rate"]
+    assert rows[1] == ["02.03.2026", "Income", "Salary", "0.05", "tiny", "", "", "", ""]
+    assert rows[2] == ["01.03.2026", "Expense", "Продукты", "-450.50", "Магазин", "#food", "", "", ""]
 
 
 def test_export_respects_search_and_tag(user, groceries, tmp_path):

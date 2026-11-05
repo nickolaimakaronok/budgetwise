@@ -344,6 +344,9 @@ def create_recurring_for_month(user, year: int, month: int) -> int:
       - months the app wasn't opened in are caught up.
     Dates always come from the TEMPLATE's date, so the day doesn't drift.
     """
+    # imported here, not at the top: currency_service itself imports this module
+    from services.currency_service import recurring_copy_money
+
     target  = date(year, month, 1)
     created = 0
 
@@ -354,22 +357,25 @@ def create_recurring_for_month(user, year: int, month: int) -> int:
             if month_start > target:
                 continue                      # already up to date
 
+            # amount (+ currency fields): a 10 € subscription is converted with today's rate
+            money = recurring_copy_money(user, tpl)
+
             while month_start <= target:
                 copy_date = get_safe_date(tpl.date, month_start.year, month_start.month)
                 Transaction.create(
                     user             = user,
                     type             = tpl.type,
-                    amount_cents     = tpl.amount_cents,
                     category         = tpl.category_id,
                     date             = copy_date,
                     note             = tpl.note,
                     is_recurring     = False,   # a copy is NOT a template
                     recurring_parent = tpl,
+                    **money,
                 )
                 created += 1
                 logger.info(
                     f"Auto-created recurring: '{tpl.note}' "
-                    f"{tpl.amount_cents} cents → {copy_date}"
+                    f"{money['amount_cents']} cents → {copy_date}"
                 )
                 month_start = _add_months(month_start, 1)
 

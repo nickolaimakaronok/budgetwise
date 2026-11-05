@@ -16,10 +16,11 @@ from services.tag_service import (
 )
 from services.csv_export_service import export_transactions_csv
 from services.currency_service import (
-    add_transaction_in_currency, parse_rate, update_transaction_in_currency,
+    add_transaction_in_currency, get_rates, parse_rate, update_transaction_in_currency,
 )
 from ui.components.amount_currency_field import AmountCurrencyField
 from models.models import Category
+from utils.currencies import currency_symbol
 from utils.formatters import format_money, format_money_short, format_date, set_currency, parse_money, parse_date
 from utils.i18n import t, months_list
 
@@ -831,6 +832,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
                 self.tx, self.user, amount_cents, currency, rate_text,
                 category=category,
                 tx_date=tx_date,
+                note=self.note_entry.get(),
                 type=self.type_var.get(),
             )
         except ValueError:  # 0 or a negative amount
@@ -871,7 +873,7 @@ class ImportCSVDialog(ctk.CTkToplevel):
         self.preview = None
 
         self.title(t("import_csv_title"))
-        self.geometry("620x690")
+        self.geometry("620x740")
         self.resizable(False, False)
         self.grab_set()
         self.grid_columnconfigure(0, weight=1)
@@ -1026,6 +1028,9 @@ class ImportCSVDialog(ctk.CTkToplevel):
         ).grid(row=5, column=1, padx=16, pady=(4, 12), sticky="ew")
         self._guess_sign_mode()
 
+        # File currency — e.g. the statement of a euro card (only if there are saved rates)
+        self._build_currency_row(mapping, row=6)
+
         # ── Preview table ─────────────────────────────────────────────────
         ctk.CTkLabel(
             self, text=t("preview"),
@@ -1080,6 +1085,48 @@ class ImportCSVDialog(ctk.CTkToplevel):
             command=self._do_import,
         ).grid(row=0, column=1, sticky="ew")
 
+    def _build_currency_row(self, mapping, row: int):
+        """File currency: [EUR ▾]  1 EUR = [3.95] ₪ — the rate is the saved one, editable."""
+        self.file_currency_var = ctk.StringVar(value=self.user.currency)
+        self.saved_rates = {r.currency: r.rate for r in get_rates(self.user)}
+        if not self.saved_rates:
+            return                                   # nothing to choose — all in the main currency
+
+        ctk.CTkLabel(mapping, text=t("file_currency"),
+                     font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,
+                     ).grid(row=row, column=0, padx=16, pady=(0, 12), sticky="w")
+        line = ctk.CTkFrame(mapping, fg_color="transparent")
+        line.grid(row=row, column=1, padx=16, pady=(0, 12), sticky="w")
+        ctk.CTkOptionMenu(
+            line, values=[self.user.currency] + list(self.saved_rates),
+            variable=self.file_currency_var, width=90,
+            font=ctk.CTkFont(size=12), height=32, corner_radius=6,
+            command=lambda _code: self._on_file_currency(),
+        ).grid(row=0, column=0)
+        self.file_rate_label = ctk.CTkLabel(line, text="", font=ctk.CTkFont(size=12))
+        self.file_rate_label.grid(row=0, column=1, padx=(12, 6))
+        self.file_rate_entry = ctk.CTkEntry(line, width=80, height=32, corner_radius=6,
+                                            font=ctk.CTkFont(size=12))
+        self.file_rate_entry.grid(row=0, column=2)
+        self.file_rate_symbol = ctk.CTkLabel(line, text=currency_symbol(self.user.currency),
+                                             font=ctk.CTkFont(size=12))
+        self.file_rate_symbol.grid(row=0, column=3, padx=(6, 0))
+        self._on_file_currency()
+
+    def _on_file_currency(self):
+        """Shows "1 EUR = [3.95] ₪" for another currency, hides it for the main one."""
+        code = self.file_currency_var.get()
+        rate_widgets = (self.file_rate_label, self.file_rate_entry, self.file_rate_symbol)
+        if code == self.user.currency:
+            for w in rate_widgets:
+                w.grid_remove()
+            return
+        for w in rate_widgets:
+            w.grid()
+        self.file_rate_label.configure(text=f"1 {code} =")
+        self.file_rate_entry.delete(0, "end")
+        self.file_rate_entry.insert(0, self.saved_rates[code])
+
     def _guess_sign_mode(self):
         """Pre-selects the sign option from the preview rows of the chosen amount column."""
         from services.csv_import_service import guess_sign_mode
@@ -1110,6 +1157,16 @@ class ImportCSVDialog(ctk.CTkToplevel):
                 date_format = fmt_str
                 break
 
+        # Another currency: every row is converted with this one rate
+        currency, rate = None, None
+        if self.file_currency_var.get() != self.user.currency:
+            currency, rate = self.file_currency_var.get(), self.file_rate_entry.get()
+            try:
+                parse_rate(rate)
+            except ValueError:
+                messagebox.showerror(t("error"), t("rate_invalid"))
+                return
+
         try:
             result = import_transactions(
                 user=self.user,
@@ -1119,6 +1176,8 @@ class ImportCSVDialog(ctk.CTkToplevel):
                 note_col=note_col,
                 date_format=date_format,
                 sign_mode=self.sign_options[self.sign_var.get()],
+                currency=currency,
+                rate=rate,
             )
         except Exception as e:
             messagebox.showerror(t("error"), str(e))

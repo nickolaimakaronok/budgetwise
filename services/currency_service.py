@@ -196,6 +196,22 @@ def preview_conversion(amount_text: str, rate_text: str) -> Optional[int]:
     except ValueError:
         return None
 
+def recurring_copy_money(user: User, tpl: Transaction) -> dict:
+    """
+    The money fields of a new monthly copy of the recurring template `tpl`.
+      - main currency: the template's amount, as before
+      - another currency (a 10 € subscription): the same 10 €, converted with
+        TODAY's saved rate — or with the template's own rate if that rate was deleted
+    """
+    if tpl.currency is None or tpl.currency == user.currency:
+        return {"amount_cents": tpl.amount_cents}
+    rate = get_rate(user, tpl.currency) or Decimal(tpl.exchange_rate)
+    return {
+        "amount_cents":          convert_cents(tpl.original_amount_cents, rate),
+        "currency":              tpl.currency,
+        "original_amount_cents": tpl.original_amount_cents,
+        "exchange_rate":         format_rate(rate),
+    }
 
 # ── Changing the main currency ────────────────────────────────────────────────
 

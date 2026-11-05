@@ -15,7 +15,9 @@ from typing import Optional
 
 from models.models import Category, User
 from utils.currencies import CURRENCIES
-from services.transaction_service import add_transaction
+from services.currency_service import (
+    add_transaction_in_currency, get_rate, normalize_currency_code, parse_rate,
+)
 from db.database import db
 
 logger = logging.getLogger(__name__)
@@ -280,6 +282,8 @@ def import_transactions(
     date_format: str,
     sign_mode: str = SIGN_SIGNED,
     skip_header: bool = True,
+    currency: Optional[str] = None,
+    rate=None,
 ) -> dict:
     """
     Imports transactions from a CSV file.
@@ -296,6 +300,9 @@ def import_transactions(
                 SIGN_ALL_EXPENSE — every row is an expense
                 SIGN_ALL_INCOME  — every row is income
         skip_header:  Skip first row
+        currency:     the currency the file is in (None = main currency) —
+                      e.g. the statement of a euro card
+        rate:         its rate, the same for every row; None = the saved rate
 
     Returns:
         {
@@ -306,6 +313,19 @@ def import_transactions(
     """
     if sign_mode not in SIGN_MODES:
         raise ValueError(f"Unknown sign_mode: {sign_mode!r}")
+
+    # A file in another currency: check the rate ONCE, before any row —
+    # not 500 identical "no rate" errors, one per row
+    if currency is not None and normalize_currency_code(currency) != user.currency:
+        currency = normalize_currency_code(currency)
+        if rate is None:
+            rate = get_rate(user, currency)
+            if rate is None:
+                raise ValueError(f"No exchange rate for {currency} — enter one in Settings")
+        rate = parse_rate(rate)
+    else:
+        currency, rate = None, None
+
     loaded = load_csv_text(filepath)
     delimiter = loaded["delimiter"]
 
@@ -354,14 +374,14 @@ def import_transactions(
                 # Try to auto-match category from note (same type only)
                 category = find_category_by_name(user, note, tx_type)
 
-                add_transaction(
-                    user=user,
-                    type=tx_type,
-                    amount_cents=amount_cents,
+                # main currency: saved as is; another one: converted with `rate`
+                add_transaction_in_currency(
+                    user, tx_type, amount_cents, currency, rate,
                     category=category,
                     tx_date=tx_date,
                     note=note[:200],  # limit note length
                 )
+
                 imported += 1
 
             except Exception as e:
