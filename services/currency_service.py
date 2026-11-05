@@ -18,7 +18,7 @@ from typing import Optional
 
 from db.database import db
 from models.models import Budget, ExchangeRate, Goal, Transaction, User
-from services.transaction_service import add_transaction
+from services.transaction_service import add_transaction, update_transaction
 
 _CODE = re.compile(r"[A-Z]{3}")
 
@@ -151,7 +151,50 @@ def add_transaction_in_currency(
 
 
 
+def update_transaction_in_currency(
+    tx: Transaction,
+    user: User,
+    amount_cents: int,
+    currency: Optional[str] = None,
+    rate=None,
+    **kwargs,
+) -> Transaction:
+    """
+    Edit window: saves the transaction with `amount_cents` given in `currency`.
+      - main currency (or None): the amount as is, the currency fields are cleared
+      - another currency: converted with `rate` — the Edit window shows the
+        purchase's own rate, so leaving it unchanged keeps the old conversion —
+        or with the saved rate if no rate is given
+    Other keyword arguments (category, tx_date, note, type) go to update_transaction.
+    """
+    if currency is None or normalize_currency_code(currency) == user.currency:
+        converted = amount_cents
+        fields = {"currency": None, "original_amount_cents": None, "exchange_rate": None}
+    else:
+        code = normalize_currency_code(currency)
+        if rate is None:
+            rate = get_rate(user, code)
+            if rate is None:
+                raise ValueError(f"No exchange rate for {code} — enter one for this purchase or in Settings")
+        rate = parse_rate(rate)
+        converted = convert_cents(amount_cents, rate)
+        fields = {"currency": code, "original_amount_cents": amount_cents,
+                  "exchange_rate": format_rate(rate)}
 
+    # One UPDATE for the amount, the other fields and the currency fields together
+    return update_transaction(tx, amount_cents=converted, currency_fields=fields, **kwargs)
+
+
+def preview_conversion(amount_text: str, rate_text: str) -> Optional[int]:
+    """
+    For the live hint while typing: '20' and '3.95' → 7900 cents.
+    None while either field is not a valid number yet.
+    """
+    from utils.formatters import parse_money
+    try:
+        return convert_cents(parse_money(amount_text), parse_rate(rate_text))
+    except ValueError:
+        return None
 
 
 # ── Changing the main currency ────────────────────────────────────────────────

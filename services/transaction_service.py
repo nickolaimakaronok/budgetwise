@@ -173,9 +173,13 @@ def update_transaction(
     tx_date: Optional[date_type] = None,
     note: Optional[str] = None,
     type: Optional[str] = None,
+    currency_fields: Optional[dict] = None,
 ) -> Transaction:
     """
     Updates an existing transaction. Only updates fields that are passed in.
+    currency_fields — {"currency", "original_amount_cents", "exchange_rate"},
+    filled by currency_service.update_transaction_in_currency; saved in the
+    same single UPDATE as the rest, so they can never get out of step.
 
     Usage:
         update_transaction(tx, amount_cents=75000, note="Updated note")
@@ -200,6 +204,11 @@ def update_transaction(
             raise ValueError("Type must be 'income' or 'expense'")
         tx.type = type
         fields.append(Transaction.type)
+
+    if currency_fields is not None:
+        for name, value in currency_fields.items():
+            setattr(tx, name, value)
+            fields.append(getattr(Transaction, name))
 
     # Save ONLY the edited columns. The Edit dialog holds an object loaded
     # earlier; a full save() would overwrite recurring_last_month (and the

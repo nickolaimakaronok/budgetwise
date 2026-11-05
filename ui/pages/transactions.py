@@ -7,7 +7,7 @@ import customtkinter as ctk
 from datetime import date
 from tkinter import messagebox, filedialog
 from services.transaction_service import (
-    filter_transactions, delete_transaction, update_transaction,
+    filter_transactions, delete_transaction,
     set_recurring, is_series_active, create_recurring_for_month,
 )
 from services.tag_service import (
@@ -15,8 +15,12 @@ from services.tag_service import (
     parse_tags_string, format_tags_edit,
 )
 from services.csv_export_service import export_transactions_csv
+from services.currency_service import (
+    add_transaction_in_currency, parse_rate, update_transaction_in_currency,
+)
+from ui.components.amount_currency_field import AmountCurrencyField
 from models.models import Category
-from utils.formatters import format_money_short, format_date, set_currency, parse_money, parse_date
+from utils.formatters import format_money, format_money_short, format_date, set_currency, parse_money, parse_date
 from utils.i18n import t, months_list
 
 # ── Theme colors — (light, dark) tuples ──────────────────────────────────────
@@ -419,11 +423,27 @@ class TransactionsPage(ctk.CTkFrame):
 
         color = "#16A34A" if tx.type == "income" else "#DC2626"
         sign  = "+" if tx.type == "income" else "-"
-        ctk.CTkLabel(
-            f, text=f"{sign}{format_money_short(tx.amount_cents)}",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color=color, width=120,
-        ).grid(row=0, column=4, padx=8)
+        amount_text = f"{sign}{format_money_short(tx.amount_cents)}"
+        if tx.is_foreign:
+            # -79 ₪ and, under it in grey, what was actually paid: 20.00 €
+            amount_box = ctk.CTkFrame(f, fg_color="transparent")
+            amount_box.grid(row=0, column=4, padx=8)
+            ctk.CTkLabel(
+                amount_box, text=amount_text, height=22,
+                font=ctk.CTkFont(size=14, weight="bold"),
+                text_color=color, width=120,
+            ).grid(row=0, column=0)
+            ctk.CTkLabel(
+                amount_box, text=format_money(tx.original_amount_cents, currency=tx.currency),
+                height=16, font=ctk.CTkFont(size=11),
+                text_color=TEXT_MUTED, width=120,
+            ).grid(row=1, column=0)
+        else:
+            ctk.CTkLabel(
+                f, text=amount_text,
+                font=ctk.CTkFont(size=14, weight="bold"),
+                text_color=color, width=120,
+            ).grid(row=0, column=4, padx=8)
 
         action_frame = ctk.CTkFrame(f, fg_color="transparent")
         action_frame.grid(row=0, column=5, padx=(4, 16))
@@ -526,7 +546,7 @@ class AddTransactionDialog(ctk.CTkToplevel):
         self.on_save = on_save
 
         self.title(t("add_transaction_title"))
-        self.geometry("420x660")
+        self.geometry("420x730")
         self.resizable(False, False)
         self.grab_set()
         self.grid_columnconfigure(0, weight=1)
@@ -551,12 +571,11 @@ class AddTransactionDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(self, text=t("amount_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=1, column=0, padx=28, pady=(20, 4), sticky="w")
-        self.amount_entry = ctk.CTkEntry(
-            self, placeholder_text="0.00",
-            font=ctk.CTkFont(size=22, weight="bold"),
-            height=52, corner_radius=8,
-        )
-        self.amount_entry.grid(row=2, column=0, **pad)
+
+        # amount + currency (+ rate row for another currency) — see ui/components
+        self.amount_field = AmountCurrencyField(self, self.user)
+        self.amount_field.grid(row=2, column=0, **pad)
+        self.amount_entry = self.amount_field.amount_entry
         self.amount_entry.focus()
 
         ctk.CTkLabel(self, text=t("category_label"), font=ctk.CTkFont(size=13),
@@ -618,13 +637,19 @@ class AddTransactionDialog(ctk.CTkToplevel):
         ).grid(row=12, column=0, padx=28, pady=28, sticky="ew")
 
     def _save(self):
-        from services.transaction_service import add_transaction
-
         try:
             amount_cents = parse_money(self.amount_entry.get())
         except ValueError:
             messagebox.showerror(t("error"), t("invalid_amount"))
             return
+
+        currency, rate_text = self.amount_field.currency_and_rate()
+        if currency:
+            try:
+                parse_rate(rate_text)
+            except ValueError:
+                messagebox.showerror(t("error"), t("rate_invalid"))
+                return
 
         try:
             tx_date = parse_date(self.date_entry.get())
@@ -634,15 +659,17 @@ class AddTransactionDialog(ctk.CTkToplevel):
 
         category = self.cat_map.get(self.cat_var.get())
 
-        tx = add_transaction(
-            user=self.user,
-            type=self.type_var.get(),
-            amount_cents=amount_cents,
-            category=category,
-            tx_date=tx_date,
-            note=self.note_entry.get(),
-            is_recurring=self.recurring_var.get(),
-        )
+        try:
+            tx = add_transaction_in_currency(
+                self.user, self.type_var.get(), amount_cents, currency, rate_text,
+                category=category,
+                tx_date=tx_date,
+                note=self.note_entry.get(),
+                is_recurring=self.recurring_var.get(),
+            )
+        except ValueError:  # 0 or a negative amount
+            messagebox.showerror(t("error"), t("invalid_amount"))
+            return
 
         # Save tags
         tag_names = parse_tags_string(self.tags_entry.get())
@@ -671,7 +698,7 @@ class EditTransactionDialog(ctk.CTkToplevel):
         self.on_save = on_save
 
         self.title(t("edit_transaction_title"))
-        self.geometry("420x640")
+        self.geometry("420x710")
         self.resizable(False, False)
         self.grab_set()
         self.grid_columnconfigure(0, weight=1)
@@ -696,12 +723,15 @@ class EditTransactionDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(self, text=t("amount_label"), font=ctk.CTkFont(size=13),
                      text_color=TEXT_SECONDARY).grid(row=1, column=0, padx=28, pady=(20, 4), sticky="w")
-        self.amount_entry = ctk.CTkEntry(
-            self, font=ctk.CTkFont(size=22, weight="bold"),
-            height=52, corner_radius=8,
+
+        # A purchase in another currency is edited in that currency, with its own rate
+        shown_cents = self.tx.original_amount_cents if self.tx.is_foreign else self.tx.amount_cents
+        self.amount_field = AmountCurrencyField(
+            self, self.user, amount_text=f"{shown_cents / 100:.2f}",
+            currency=self.tx.currency, rate=self.tx.exchange_rate,
         )
-        self.amount_entry.insert(0, str(self.tx.amount_cents / 100))
-        self.amount_entry.grid(row=2, column=0, **pad)
+        self.amount_field.grid(row=2, column=0, **pad)
+        self.amount_entry = self.amount_field.amount_entry
         self.amount_entry.focus()
 
         ctk.CTkLabel(self, text=t("category_label"), font=ctk.CTkFont(size=13),
@@ -786,16 +816,26 @@ class EditTransactionDialog(ctk.CTkToplevel):
             messagebox.showerror(t("error"), t("invalid_date"))
             return
 
+        currency, rate_text = self.amount_field.currency_and_rate()
+        if currency:
+            try:
+                parse_rate(rate_text)
+            except ValueError:
+                messagebox.showerror(t("error"), t("rate_invalid"))
+                return
+
         category = self.cat_map.get(self.cat_var.get())
 
-        update_transaction(
-            self.tx,
-            amount_cents=amount_cents,
-            category=category,
-            tx_date=tx_date,
-            note=self.note_entry.get(),
-            type=self.type_var.get(),
-        )
+        try:
+            update_transaction_in_currency(
+                self.tx, self.user, amount_cents, currency, rate_text,
+                category=category,
+                tx_date=tx_date,
+                type=self.type_var.get(),
+            )
+        except ValueError:  # 0 or a negative amount
+            messagebox.showerror(t("error"), t("invalid_amount"))
+            return
 
         # Update tags
         tag_names = parse_tags_string(self.tags_entry.get())

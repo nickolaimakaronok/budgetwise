@@ -5,9 +5,6 @@ Formatting helpers for money, dates, and other display values.
 
 from datetime import date, datetime
 
-
-from datetime import date, datetime
-
 from utils.currencies import CURRENCIES
 
 # "ILS" → "₪" — built from the one list in utils/currencies.py
@@ -21,18 +18,20 @@ def set_currency(currency: str):
     _current_currency = currency
 
 
-def format_money(amount_cents: int, show_sign: bool = False) -> str:
+def format_money(amount_cents: int, show_sign: bool = False, currency: str | None = None) -> str:
     """
-    Formats cents into a human-readable string.
-    format_money(150050)  →  "1 500.50 $"
-    format_money(-50000)  →  "-500.00 $"
+    Formats cents into a human-readable string — in the main currency,
+    or in `currency` (the original amount of a purchase in another currency).
+    format_money(150050)                 →  "1 500.50 $"
+    format_money(-50000)                 →  "-500.00 $"
+    format_money(2000, currency="EUR")   →  "20.00 €"
     """
-    symbol = CURRENCY_SYMBOLS.get(_current_currency, _current_currency)
+    code = currency or _current_currency
+    symbol = CURRENCY_SYMBOLS.get(code, code)
     amount = amount_cents / 100
     sign = "+" if show_sign and amount > 0 else ""
     formatted = f"{amount:,.2f}".replace(",", " ")
     return f"{sign}{formatted} {symbol}"
-
 
 def format_money_short(amount_cents: int) -> str:
     """Short format for the dashboard: 1 500 $ (no decimals if amount is whole)."""
@@ -57,7 +56,7 @@ def parse_money(text: str) -> int:
         cleaned = cleaned.replace(sym, "")
     try:
         return round(float(cleaned) * 100)
-    except ValueError:
+    except (ValueError, OverflowError):  # "abc", "nan" — and "inf", which crashed before
         raise ValueError(f"Invalid amount format: '{text}'")
 
 
