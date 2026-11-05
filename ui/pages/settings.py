@@ -9,8 +9,11 @@ from tkinter import messagebox
 from db.database import db, DB_PATH
 from db.backup import create_backup, default_backup_dir
 from models.models import Category, User
-from utils.formatters import set_currency
-from utils.currencies import CURRENCY_CODES
+from utils.formatters import format_date
+from utils.currencies import CURRENCY_CODES, currency_symbol
+from services.currency_service import (
+    delete_rate, get_rates, normalize_currency_code, parse_rate, set_rate,
+)
 from utils.platform_utils import open_path, is_mac
 from utils.i18n import t, set_language, get_language
 
@@ -66,9 +69,10 @@ class SettingsPage(ctk.CTkFrame):
         scroll.grid_columnconfigure(0, weight=1)
 
         self._section_profile(scroll, 0)
-        self._section_appearance(scroll, 1)
-        self._section_categories(scroll, 2)
-        self._section_data(scroll, 3)
+        self._section_rates(scroll, 1)
+        self._section_appearance(scroll, 2)
+        self._section_categories(scroll, 3)
+        self._section_data(scroll, 4)
 
     # ── Profile ───────────────────────────────────────────────────────────────
 
@@ -109,13 +113,132 @@ class SettingsPage(ctk.CTkFrame):
         ).grid(row=7, column=0, padx=24, pady=(0, 24), sticky="ew")
 
     def _save_profile(self):
+        new_currency = self.currency_var.get()
         with db:
-            self.user.name        = self.name_entry.get().strip() or self.user.name
-            self.user.currency    = self.currency_var.get()
+            self.user.name = self.name_entry.get().strip() or self.user.name
             self.user.month_start = int(self.month_start_var.get())
             self.user.save()
-        set_currency(self.user.currency)
-        messagebox.showinfo(t("saved_title"), t("profile_saved"))
+
+        if new_currency == self.user.currency:
+            messagebox.showinfo(t("saved_title"), t("profile_saved"))
+            return
+
+        # A new main currency affects every amount — ask how (only the symbol / convert)
+        from ui.components.change_currency_dialog import ChangeCurrencyDialog
+        ChangeCurrencyDialog(
+            self, self.user, new_currency,
+            on_done=lambda: self.app.show_page("settings"),
+            on_cancel=lambda: self.currency_var.set(self.user.currency),
+        )
+
+    # ── Exchange rates ────────────────────────────────────────────────────────
+
+    def _section_rates(self, parent, row):
+        card = self._card(parent, row, t("exchange_rates"))
+        main_symbol = currency_symbol(self.user.currency)
+
+        ctk.CTkLabel(
+            card, text=t("rates_hint").format(main_symbol),
+            font=ctk.CTkFont(size=12), text_color=TEXT_SECONDARY,
+            wraplength=560, justify="left",
+        ).grid(row=1, column=0, padx=24, pady=(0, 12), sticky="w")
+
+        rates = get_rates(self.user)
+        if not rates:
+            ctk.CTkLabel(
+                card, text=t("no_rates"),
+                font=ctk.CTkFont(size=13), text_color=TEXT_MUTED,
+            ).grid(row=2, column=0, padx=24, pady=(0, 12), sticky="w")
+
+        # One row per rate: 1 EUR = [3.95] ₪   updated 05.11.2026   [Save] [×]
+        for i, rate in enumerate(rates):
+            row_f = ctk.CTkFrame(card, fg_color=BG_ROW, corner_radius=8)
+            row_f.grid(row=i + 2, column=0, padx=24, pady=(0, 8), sticky="ew")
+            row_f.grid_columnconfigure(3, weight=1)
+
+            ctk.CTkLabel(
+                row_f, text=f"1 {rate.currency} =",
+                font=ctk.CTkFont(size=13), text_color=TEXT_PRIMARY,
+            ).grid(row=0, column=0, padx=(12, 8), pady=8)
+            entry = ctk.CTkEntry(row_f, width=100, height=30, corner_radius=6,
+                                 font=ctk.CTkFont(size=13))
+            entry.insert(0, rate.rate)
+            entry.grid(row=0, column=1)
+            ctk.CTkLabel(
+                row_f, text=main_symbol,
+                font=ctk.CTkFont(size=13), text_color=TEXT_PRIMARY,
+            ).grid(row=0, column=2, padx=(6, 12))
+            ctk.CTkLabel(
+                row_f, text=t("rate_updated").format(format_date(rate.updated_at.date())),
+                font=ctk.CTkFont(size=11), text_color=TEXT_MUTED,
+            ).grid(row=0, column=3, sticky="w")
+            ctk.CTkButton(
+                row_f, text=t("rate_save"), width=90, height=28, corner_radius=6,
+                fg_color=BTN_SECONDARY, hover_color=BTN_SECONDARY_HOVER,
+                text_color=TEXT_PRIMARY, font=ctk.CTkFont(size=12),
+                command=lambda c=rate.currency, e=entry: self._save_rate(c, e.get()),
+            ).grid(row=0, column=4, padx=(8, 4))
+            ctk.CTkButton(
+                row_f, text="×", width=32, height=28, corner_radius=6,
+                fg_color="transparent", hover_color=HOVER_RED, text_color="#DC2626",
+                font=ctk.CTkFont(size=18, weight="bold"),
+                command=lambda c=rate.currency: self._delete_rate(c),
+            ).grid(row=0, column=5, padx=(0, 8))
+
+        # Add a rate: [EUR ▾ or any code] [3.95] [+ Add]
+        add_row = ctk.CTkFrame(card, fg_color="transparent")
+        add_row.grid(row=99, column=0, padx=24, pady=(8, 24), sticky="ew")
+        add_row.grid_columnconfigure(1, weight=1)
+
+        taken = {r.currency for r in rates} | {self.user.currency}
+        free_codes = [c for c in CURRENCY_CODES if c not in taken]
+        self.new_rate_code = ctk.CTkComboBox(  # a list to pick from, but any code can be typed
+            add_row, values=free_codes, width=110, height=36, corner_radius=8,
+            font=ctk.CTkFont(size=13),
+        )
+        self.new_rate_code.set(free_codes[0] if free_codes else "")
+        self.new_rate_code.grid(row=0, column=0, padx=(0, 8))
+
+        self.new_rate_value = ctk.CTkEntry(
+            add_row, placeholder_text="3.95", height=36, corner_radius=8,
+            font=ctk.CTkFont(size=13),
+        )
+        self.new_rate_value.grid(row=0, column=1, padx=(0, 8), sticky="ew")
+
+        ctk.CTkButton(
+            add_row, text=t("add"), width=80, height=36, corner_radius=8,
+            fg_color="#2563EB", hover_color="#1D4ED8",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            command=lambda: self._save_rate(self.new_rate_code.get(), self.new_rate_value.get()),
+        ).grid(row=0, column=2)
+
+    def _rate_input_error(self, code_text, rate_text):
+        """A message for the user, or None if the currency code and the rate are fine."""
+        try:
+            code = normalize_currency_code(code_text)
+        except ValueError:
+            return t("currency_code_invalid")
+        if code == self.user.currency:
+            return t("rate_is_main").format(code)
+        try:
+            parse_rate(rate_text)
+        except ValueError:
+            return t("rate_invalid")
+        return None
+
+    def _save_rate(self, code_text, rate_text):
+        """Adds a new rate or replaces an existing one (same code)."""
+        error = self._rate_input_error(code_text, rate_text)
+        if error:
+            messagebox.showerror(t("error"), error)
+            return
+        set_rate(self.user, code_text, rate_text)
+        self.app.show_page("settings")
+
+    def _delete_rate(self, code):
+        if messagebox.askyesno(t("exchange_rates"), t("rate_delete_confirm").format(code)):
+            delete_rate(self.user, code)
+            self.app.show_page("settings")
 
     # ── Appearance ────────────────────────────────────────────────────────────
 
