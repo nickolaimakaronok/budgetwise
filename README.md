@@ -1,249 +1,117 @@
-# 💰 BudgetWise Desktop
+# 💰 BudgetWise
 
-![Tests](https://github.com/nickolaimakaronok/budgetwise/actions/workflows/tests.yml/badge.svg)
-[⬇️ Download latest release](https://github.com/nickolaimakaronok/budgetwise/releases/latest)
+[![Tests](https://github.com/nickolaimakaronok/budgetwise/actions/workflows/tests.yml/badge.svg)](https://github.com/nickolaimakaronok/budgetwise/actions/workflows/tests.yml)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue)
 
-## Demo
-[▶️ Watch demo on YouTube](https://youtu.be/-BR_jM5aqeQ)
+A personal finance desktop app written in Python. Track income and expenses, set monthly budgets, plan savings goals and see where the money goes.
+Everything stays on your computer in a local SQLite database.
 
-> A personal finance desktop app for macOS built entirely in Python.
-> Track income and expenses, set budget limits, manage savings goals, and visualize spending analytics.
-
-**Version:** 1.4.0
-**Platform:** macOS (Apple Silicon + Intel)
-**Language:** Python 3.12
-**UI:** CustomTkinter + Matplotlib
-
----
-
-## 📋 Table of Contents
-
-- [What it does](#what-it-does)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Running the app](#running-the-app)
-- [Running tests](#running-tests)
-- [Building the .app](#building-the-app)
-- [Project structure](#project-structure)
-- [Tech stack](#tech-stack)
-- [Key rules](#key-rules)
-- [Changelog](#changelog)
-
----
-
-## What it does
-
-| Page | Features |
-|---|---|
-| **Dashboard** | Monthly balance, income/expenses cards, recent transactions |
-| **Transactions** | Add / edit / delete, filters by type + category + date, CSV export |
-| **Budget** | Set monthly limits per category, progress bars, warning/danger colors |
-| **Analytics** | Pie chart by category, bar chart by day, breakdown table |
-| **Goals** | Savings goals with progress bars, contribute, auto-complete |
-| **Settings** | Currency, theme (Light/Dark/System), custom categories, DB backup |
-
----
-
-
-## Screenshots
-
-### Dashboard
 ![Dashboard](screenshots/Dashboard_screenshot.png)
 
-### Transactions
-![Transactions](screenshots/Transactions_screenshot.png)
-
-### Repeat_Transactions
-![Transactions](screenshots/Repeat_transactions_screenshot.png)
-
-### Budget
-![Budget](screenshots/Budget_screenshot.png)
-
-### Analytics1
-![Analytics](screenshots/Analytics_screenshot1.png)
-
-### Analytics2
-![Analytics](screenshots/Analytics_screenshot2.png)
-
-### Goals
-![Goals](screenshots/Goals_screenshot.png)
-
-### Settings1
-![Goals](screenshots/Settings_screenshot1.png)
-
-### Settings2
-![Goals](screenshots/Settings_screenshot2.png)
-
-## Requirements
-
-### System
-- macOS 10.13 or later (tested on macOS 15 Sequoia, Apple Silicon M-series)
-- Python 3.12 (via Anaconda or standalone)
-
-### Python environment
-- All dependencies are listed in `requirements.txt`
-- Use a **virtual environment** (`.venv`) — do NOT install into system/conda Python
-
-### IDE
-- **PyCharm** (recommended — auto-activates `.venv`, runs tests with one click)
-- **VSCode** (works, requires manual interpreter selection)
+▶️ [Demo video](https://youtu.be/-BR_jM5aqeQ) (recorded with v1.x)
 
 ---
 
-## Installation
+## Features
 
-### Step 1 — Clone or download the project
+- **Dashboard** — monthly balance, income, expenses and savings, latest transactions
+- **Transactions** — add, edit, delete; filter by type, category, dates and #tags; search by note, category or tag; quick add with ⌘N / Ctrl+N
+- **Recurring payments** — rent, subscriptions and salary are added every month automatically; missed months are caught up and the day never drifts (31 Jan → 28 Feb → 31 Mar)
+- **Bank CSV import** — choose the columns, date format and how the amount sign is read; the file encoding is detected automatically (UTF-8, UTF-16, Windows-1251 Cyrillic, Windows-1255 Hebrew)
+- **Export** — CSV that opens correctly in Excel and can be imported back, plus a monthly PDF report
+- **Budgets** — monthly limit per category, warning at 80 % and alert at 100 %, copy last month's limits in one click, system notifications when a limit is exceeded
+- **Analytics** — spending by category, by day and income vs. expenses over the year
+- **Goals** — savings goals with contributions, deadlines and how much to save per month
+- **Settings** — currency (₪ $ € £ ₽), light / dark / system theme, English / Russian / German, custom categories, one-click backup
+
+<table>
+  <tr>
+    <td><img src="screenshots/Transactions_screenshot.png" alt="Transactions"><br><sub>Transactions — search and filters</sub></td>
+    <td><img src="screenshots/Repeat_transactions_screenshot.png" alt="Add transaction"><br><sub>Adding a monthly recurring payment</sub></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/Budget_screenshot.png" alt="Budget"><br><sub>Budget limits per category</sub></td>
+    <td><img src="screenshots/Goals_screenshot.png" alt="Goals"><br><sub>Savings goals with deadlines</sub></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/Analytics_screenshot1.png" alt="Analytics"><br><sub>Analytics — spending by category</sub></td>
+    <td><img src="screenshots/Analytics_screenshot2.png" alt="Analytics breakdown"><br><sub>Analytics — daily spending and breakdown</sub></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/Settings_screenshot1.png" alt="Settings"><br><sub>Settings — profile and appearance</sub></td>
+    <td><img src="screenshots/Settings_screenshot2.png" alt="Settings data"><br><sub>Settings — categories and backups</sub></td>
+  </tr>
+</table>
+
+---
+
+## Under the hood
+
+- **Layered architecture.** `ui/` only displays data, `services/` holds all business logic, `models/` defines the Peewee ORM models. The UI never queries the database directly, so the logic is tested without opening a window.
+- **Money is stored as integer cents.** No floating-point rounding anywhere, including CSV import and export.
+- **Data safety**
+  - Automatic backup on every start using the SQLite backup API (it includes data still in the WAL file); the newest 10 are kept, manual backups are never deleted.
+  - Versioned schema migrations (`PRAGMA user_version`) upgrade old databases in place. A regression test covers a real bug where adding a column after `create_tables()` corrupted the database file.
+  - On upgrade, user data is moved from `~/Documents` to the OS app-data folder with a one-time migration: copy → integrity check → row-count check → atomic rename. The old file is kept, nothing is deleted.
+- **Recurring transactions as a series.** One template, generated copies and a "last generated month" counter: running it twice creates nothing new, missed months are caught up, and editing or deleting a copy never causes a double charge.
+- **Cross-platform.** Everything OS-specific lives in `utils/platform_utils.py`: the data folder, keyboard shortcuts, opening folders, and notifications (`osascript` on macOS, `plyer` on Windows and Linux).
+- **Performance.** Transactions render in pages of 200 rows, totals are calculated with SQL `SUM … GROUP BY`, and tags load in one query instead of one per row.
+- **Tests and CI.** 260+ pytest tests. GitHub Actions runs them on macOS, Windows and Linux with Python 3.12, 3.13 and 3.14 on every push. Tests use in-memory or temporary databases and never touch real user data.
+
+---
+
+## Run from source
+
+Requires **Python 3.12 – 3.14** with Tk (included in the python.org installers; with Homebrew install `python-tk`, on Linux `python3-tk`).
+
+**macOS / Linux**
 
 ```bash
-cd ~/Documents/DevelopAndProgramming
-# if using git:
 git clone https://github.com/nickolaimakaronok/budgetwise.git
 cd budgetwise
-```
-
-### Step 2 — Create virtual environment
-
-```bash
 python3 -m venv .venv
-```
-
-### Step 3 — Activate virtual environment
-
-```bash
 source .venv/bin/activate
-```
-
-> You should see `(.venv)` at the start of your terminal prompt.
-> You need to do this every time you open a new terminal window.
-> In PyCharm — this happens automatically.
-
-### Step 4 — Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-This installs:
-
-| Package | Version | Purpose |
-|---|---|---|
-| customtkinter | 5.2.2 | Modern UI widgets |
-| matplotlib | 3.9.2 | Charts and graphs |
-| peewee | 3.17.6 | SQLite ORM |
-| numpy | 1.26.4 | Required by matplotlib |
-| plyer | 2.1.0 | macOS system notifications |
-| tkcalendar | 1.6.1 | Date picker widget |
-| Pillow | 10.4.0 | Image support |
-| pytest | 8.3.3 | Test runner |
-| pyinstaller | 6.10.0 | Build .app bundle |
-
-> ⚠️ numpy must be version **1.26.4** — newer versions (2.x) conflict with PyInstaller + Anaconda.
-
-### Step 5 — Initialize the database
-
-```bash
+python -m pip install -r requirements.txt
 python main.py
 ```
 
-On first run this automatically:
-- Creates `~/Documents/BudgetWise/budget.db`
-- Creates all tables
-- Seeds 18 default categories (Groceries, Salary, Transport, etc.)
+**Windows (PowerShell)**
 
----
-
-## Running the app
-
-### During development (fastest)
-
-```bash
-source .venv/bin/activate
+```powershell
+git clone https://github.com/nickolaimakaronok/budgetwise.git
+cd budgetwise
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 python main.py
 ```
 
-### From PyCharm
+On the first start a short onboarding asks for your name, currency and language, and 18 default categories are created.
 
-1. Open the `budgetwise/` folder in PyCharm
-2. PyCharm detects `.venv` automatically — click OK if prompted
-3. Open `main.py`
-4. Click the green ▶️ Run button
+> On Linux, desktop notifications need `notify-send` (package `libnotify-bin`).
 
-### As .app bundle (production)
+### Run the tests
 
 ```bash
-open dist/BudgetWise.app
+python -m pytest tests/ -q
 ```
 
-Or double-click `BudgetWise.app` in Finder.
-
-> If macOS blocks it: right-click → Open → Open (first time only)
-> Or run: `xattr -cr dist/BudgetWise.app && open dist/BudgetWise.app`
+Use `python -m pytest` rather than plain `pytest`, so the tests run with the Python from `.venv`.
 
 ---
 
-## Running tests
+## Where your data lives
 
-```bash
-source .venv/bin/activate
-python -m pytest tests/ -v
-```
+| OS | Folder |
+|---|---|
+| macOS | `~/Library/Application Support/BudgetWise/` |
+| Windows | `%LOCALAPPDATA%\BudgetWise\` |
+| Linux | `~/.local/share/BudgetWise/` |
 
-Expected output: **124 passed** across two test files.
+The folder contains `budget.db`, the `backups/` folder and `budgetwise.log`. The exact path is shown in **Settings**, and **Open Backup Folder** opens the backups inside it.
+To keep the data somewhere else, set the `BUDGETWISE_DATA_DIR` environment variable.
 
-| File | Tests | What it covers |
-|---|---|---|
-| `tests/test_formatters.py` | 18 | Money formatting, date parsing, currency symbols |
-| `tests/test_services.py` | 20 | Transaction CRUD, budget status, analytics |
-| `tests/test_full.py` | 86 | Full integration: models, services, edge cases |
-
-> Always use `python -m pytest` not just `pytest` — the latter may use the wrong Python interpreter.
-
----
-
-## Building the .app
-
-The app is built using PyInstaller into a standalone macOS `.app` bundle.
-Users don't need Python installed to run it.
-
-### Prerequisites
-
-Make sure `.venv` is active and numpy 1.26.4 is installed:
-
-```bash
-source .venv/bin/activate
-python -c "import numpy; print(numpy.__version__)"  # should print 1.26.4
-```
-
-### Build
-
-```bash
-rm -rf build/ dist/
-./build.sh
-```
-
-Build takes 2-5 minutes. Output is at `dist/BudgetWise.app`.
-
-### Install to Applications folder
-
-```bash
-xattr -cr dist/BudgetWise.app
-cp -r dist/BudgetWise.app /Applications/BudgetWise.app
-open /Applications/BudgetWise.app
-```
-
-### What `build.sh` does
-
-```bash
-#!/bin/bash
-# Strips conda from PATH to prevent numpy conflict
-# Runs PyInstaller with --noconfirm --clean
-# Packages into BudgetWise.app with icon + metadata
-```
-
-> ⚠️ If you move the project folder, update the path in `BudgetWise.spec` under `datas`:
-> ```python
-> ('/Users/YOU/path/to/budgetwise/.venv/lib/python3.12/site-packages/customtkinter', 'customtkinter/'),
-> ```
+> **Upgrading from 1.x:** data in `~/Documents/BudgetWise` is moved automatically on the first start. The old database stays there as `budget.db.moved`.
 
 ---
 
@@ -251,225 +119,84 @@ open /Applications/BudgetWise.app
 
 ```
 budgetwise/
-│
-├── main.py                      # Entry point — run this to start the app
-├── requirements.txt             # All Python dependencies
-├── BudgetWise.spec              # PyInstaller build config
-├── build.sh                     # Build script for .app
-├── create_icon.py               # Generates assets/BudgetWise.icns
-│
+├── main.py                     # entry point: logging → migrations → onboarding → main window
+├── requirements.txt
 ├── db/
-│   ├── database.py              # SQLite connection via Peewee
-│   └── migrations.py            # Creates tables + seeds 18 default categories
-│
+│   ├── database.py             # SQLite connection (Peewee) in the app-data folder
+│   ├── migrations.py           # tables, schema upgrades, default categories
+│   ├── backup.py               # backups via the SQLite backup API + rotation
+│   └── data_move.py            # one-time move of the data out of ~/Documents
 ├── models/
-│   └── models.py                # Data models: User, Transaction, Category, Budget, Goal
-│
-├── services/                    # Business logic — UI never touches DB directly
-│   ├── transaction_service.py   # add / get / update / delete / get_totals
-│   ├── budget_service.py        # set_budget / get_budget_status / copy_from_prev_month
-│   └── analytics_service.py     # get_balance / get_spending_by_category / get_month_summary
-│
+│   └── models.py               # User, Category, Transaction, Budget, Goal, Tag
+├── services/                   # business logic — the UI never touches the database
+│   ├── transaction_service.py  # CRUD, filters, totals, recurring series
+│   ├── budget_service.py       # limits, status, copy from last month
+│   ├── analytics_service.py    # totals by category, day and year
+│   ├── goal_service.py         # goals, contributions, deadlines
+│   ├── tag_service.py          # #tags
+│   ├── csv_import_service.py   # bank CSV: encodings, delimiters, amount formats
+│   ├── csv_export_service.py
+│   └── pdf_service.py          # monthly PDF report
 ├── ui/
-│   ├── app.py                   # Main window with sidebar navigation
-│   └── pages/
-│       ├── dashboard.py         # Balance card + stat cards + recent transactions
-│       ├── transactions.py      # Table + filters + add/edit/delete + CSV export
-│       ├── budget.py            # Budget limits with progress bars
-│       ├── analytics.py         # Pie chart + bar chart + breakdown table
-│       ├── goals.py             # Savings goals with progress bars
-│       ├── settings.py          # Profile, theme, categories, backup
-│       └── placeholder.py       # Temporary placeholder for unfinished pages
-│
+│   ├── app.py                  # main window, sidebar, keyboard shortcuts
+│   └── pages/                  # dashboard, transactions, budget, analytics, goals, settings, onboarding
 ├── utils/
-│   ├── constants.py             # APP_NAME, colors, fonts, nav items
-│   ├── formatters.py            # format_money, parse_money, format_date, etc.
-│   └── notifications.py         # Background thread for budget limit alerts
-│
-├── assets/
-│   └── BudgetWise.icns          # App icon (generated by create_icon.py)
-│
-└── tests/
-    ├── test_formatters.py        # Unit tests for formatters
-    ├── test_services.py          # Unit tests for all three services
-    └── test_full.py              # Full integration test suite (124 tests)
-```
-
-### Data flow
-
-```
-User clicks in UI
-      ↓
-ui/pages/*.py          — display only, no DB access
-      ↓
-services/*.py          — all business logic and calculations
-      ↓
-models/models.py       — Peewee ORM models
-      ↓
-~/Documents/BudgetWise/budget.db   — SQLite file on disk
+│   ├── platform_utils.py       # everything that differs between macOS, Windows and Linux
+│   ├── notifications.py        # background budget checks
+│   ├── i18n.py                 # English / Russian / German texts
+│   ├── formatters.py           # money and date formatting and parsing
+│   └── ...                     # theme, constants, logging, category translations
+└── tests/                      # pytest suite; conftest.py points the app at a temporary folder
 ```
 
 ---
 
 ## Tech stack
 
-| Layer | Technology | Why |
-|---|---|---|
-| UI | CustomTkinter | Pure Python, modern look, dark/light theme, no JS |
-| Charts | Matplotlib + FigureCanvasTkAgg | Embeds directly into CustomTkinter frames |
-| Database | SQLite (built into Python) | Zero config, single file, ACID transactions |
-| ORM | Peewee | Simplest Python ORM, one file, no boilerplate |
-| Notifications | plyer | One-line macOS system notifications |
-| Build | PyInstaller | Packages everything into a standalone .app |
-| Tests | pytest | Standard Python test runner |
-
-### Database location
-
-```
-~/Documents/BudgetWise/budget.db
-```
-
-Both `python main.py` and `dist/BudgetWise.app` use the **same database file**.
-Backups are saved to `~/Documents/BudgetWise/backups/`.
+| Layer | Technology |
+|---|---|
+| UI | CustomTkinter |
+| Charts | Matplotlib (embedded in Tk) |
+| Database | SQLite + Peewee ORM |
+| PDF | ReportLab |
+| Notifications | `osascript` on macOS, plyer on Windows / Linux |
+| Tests and CI | pytest, GitHub Actions |
+| Packaging | PyInstaller |
 
 ---
 
-## Key rules
+## Roadmap
 
-### Money is always stored in cents (integer)
-
-```python
-# CORRECT — store as integer cents
-amount_cents = round(150.50 * 100)  # → 15050
-
-# WRONG — never use float for money
-amount = 150.50  # ❌ floating point errors
-```
-
-### UI never touches the database directly
-
-```python
-# CORRECT
-from services.transaction_service import add_transaction
-add_transaction(user, "expense", 15050, category=cat)
-
-# WRONG
-Transaction.create(...)  # ❌ never do this from UI code
-```
-
-### Always activate .venv before running anything
-
-```bash
-source .venv/bin/activate   # every new terminal session
-python main.py
-python -m pytest tests/ -v
-python -m PyInstaller --noconfirm BudgetWise.spec
-```
+- [ ] Downloadable builds for macOS (`.app`) and Windows (`.exe`) via GitHub Actions and Releases
+- [ ] Layout polish for high-DPI Windows screens
+- [ ] Stricter amount validation in forms
+- [ ] Translated notification texts and PDF fonts for Cyrillic and Hebrew
+- [ ] Hebrew interface (right-to-left)
 
 ---
 
 ## Changelog
 
-**Version:** 1.7.0
+### 2.0.0 — November 2026
+- Cross-platform: Ctrl+N on Windows and Linux, opening folders and system notifications on every OS
+- Data moved to the OS app-data folder with a safe automatic migration; a clear error window if the data can't be opened
+- Reliable backups through the SQLite backup API, with rotation
+- Recurring transactions rebuilt as series: no day drift, no double charges, missed months caught up
+- All transactions are listed (in pages), not only the latest 200; faster totals and tag loading
+- Bank CSV import with column mapping, sign modes and encoding detection (incl. Hebrew); CSV export with signed amounts and a UTF-8 BOM for Excel
+- Python 3.12 – 3.14 and Tk 9 support; CI on macOS, Windows and Linux; 260+ tests
 
-### v1.7.0 (March 2026)
-- 🌍 Localization — English, Russian, German
-- 🗂 System categories translated in DB on language change
-- 🔄 Navigation labels update with language
-
-### v1.6.0 (March 2026)
-- 🌙 Dark theme across all pages
-- 📄 PDF monthly report export
-- 📈 Yearly income vs expense chart in Analytics
-- 🔧 Fixed CI — matplotlib and reportlab in GitHub Actions
-
-### v1.5.0 (March 2026)
-- ✅ Search transactions by category and note
-- ✅ Goal deadlines — days left and needed per month
-- ✅ 147 automated tests — goal_service fully covered
-- ✅ Fixed CI — matplotlib added to GitHub Actions
-
-### v1.4.0 (March 2026)
-- ✅ Recurring transactions — auto-create monthly with smart date handling
-- ✅ Repeat monthly checkbox in Add Transaction dialog
-- ✅ Smart date calculation for Feb 28/29, months with 30/31 days
-- ✅ Database migrations for existing users
-
-### v1.3.0 (March 2026)
-- ✅ Goal service — logic moved to services/goal_service.py
-- ✅ Proper logging — events saved to ~/Documents/BudgetWise/budgetwise.log
-- ✅ Validation in goal_service — empty name and zero amount now raise errors
-- ✅ Architecture improved — all 5 modules now follow services pattern
-- ✅ GitHub Actions CI — auto-run 124 tests on every push
-- ✅ Screenshots added to README
-- ✅ Demo video link added to README
-
-### v1.2.0 (March 2026)
-- ✅ Background budget notifications — daemon thread checks limits every hour
-- ✅ Test Notifications button in Settings
-- ✅ GitHub Actions CI — auto-run 124 tests on every push
-- ✅ Screenshots added to README
-
-### v1.1.0 (March 2026)
-- ✅ Edit transactions — pre-filled dialog with current values
-- ✅ Filters in Transactions page — by type, category, date range
-- ✅ Export to CSV — exports current filtered view
-- ✅ Background budget notifications via plyer
-- ✅ Analytics page month selector
-- ✅ Budget page month selector
-- ✅ Shared database path (python main.py and .app use same file)
-- ✅ Downgraded numpy to 1.26.4 for PyInstaller compatibility
-
-### v1.0.0 (March 2026)
-- ✅ Dashboard with monthly balance and recent transactions
-- ✅ Transactions — add and delete
-- ✅ Budget — set limits, progress bars, warning/danger colors
-- ✅ Analytics — pie chart, bar chart, category breakdown
-- ✅ Goals — savings goals with progress bars and contributions
-- ✅ Settings — currency, theme, custom categories, DB backup
-- ✅ PyInstaller .app build for macOS
-- ✅ 124 automated tests
+### Earlier versions
+- **1.8.0** — first-start onboarding: name, currency, language
+- **1.7.0** — English, Russian and German interface; system categories translated
+- **1.6.0** — dark theme, monthly PDF report, yearly income vs. expenses chart
+- **1.5.0** — search by category and note, goal deadlines
+- **1.4.0** — recurring monthly transactions, database migrations for existing users
+- **1.3.0** — goal service, logging to a file, GitHub Actions CI
+- **1.2.0** — background budget notifications
+- **1.1.0** — editing transactions, filters, CSV export, month selectors
+- **1.0.0** — dashboard, transactions, budgets, analytics, goals, settings
 
 ---
 
-## Common issues
-
-### `ModuleNotFoundError: No module named 'peewee'`
-You're using the system Python instead of `.venv`. Run:
-```bash
-source .venv/bin/activate
-python main.py
-```
-
-### App doesn't open after double-click
-macOS is blocking an unsigned app. Run:
-```bash
-xattr -cr dist/BudgetWise.app
-open dist/BudgetWise.app
-```
-
-### Analytics doesn't show in .app
-Make sure numpy 1.26.4 is installed in `.venv` (not conda):
-```bash
-source .venv/bin/activate
-pip install numpy==1.26.4 --force-reinstall
-rm -rf build/ dist/
-./build.sh
-```
-
-### PyInstaller asks "Continue? (y/N)"
-Use the `--noconfirm` flag or use `./build.sh` which handles this automatically.
-
----
-
-## Building .app after cloning
-```bash
-mv BudgetWise.spec.py BudgetWise.spec
-python3 -m venv .venv
-source .venv/bin/activate
-pip install numpy==1.26.4 --force-reinstall
-pip install -r requirements.txt
-./build.sh
-```
-
-*Built with Python 3.12 · CustomTkinter · SQLite · Peewee · Matplotlib · PyInstaller*
+Made by Nickolai Makaronok [nickolaimakaronok](https://github.com/nickolaimakaronok), Computer Science student at Tel Aviv University.
